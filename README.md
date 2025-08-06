@@ -52,7 +52,13 @@ additional analyses:
 ## ✨ Features
 
 - **Combined UX & SEO audit** – collects on‑page content, accessibility and
-  performance metrics in one report.
+  performance metrics in one report.  The lightweight analyser extracts
+  titles, meta descriptions, headings, links, images and alt text and
+  measures response time and page weight.  It also detects canonical
+  tags, robots meta, Open Graph metadata, structured data, responsive
+  viewport settings and ARIA attributes for accessibility.  These extra
+  signals go beyond a simple GPT prompt to provide concrete data for
+  improvement【600788209180035†L501-L540】【600788209180035†L553-L599】.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
 - **Automated workflow** – runs headlessly via command line and can be
@@ -63,6 +69,22 @@ additional analyses:
 - **Export formats** – prints structured JSON to stdout by default;
   additional exporters (e.g. Markdown or Notion API) can be implemented
   easily.
+
+### Quick audit via Streamlit
+
+The repository includes a `streamlit_app.py` that powers a free, hosted
+web interface.  This app offers an instant audit by analysing the
+page’s HTML directly (no Lighthouse needed).  It computes a UX/SEO
+score based on heuristics like title length, meta description length,
+presence of a single H1, alt text ratio, internal/external link
+balance, readability, and the extra signals mentioned above (canonical
+tag, robots meta, Open Graph tags, JSON‑LD structured data, viewport
+meta, ARIA usage, lazy loading).  The tool then generates a set of
+actionable suggestions to improve the page.  These heuristics draw on
+industry guidance: canonical tags tell search engines which version of a
+page to index【600788209180035†L501-L540】, Open Graph tags control how
+links appear on social media【600788209180035†L553-L599】, and alt
+attributes help both users and search engines understand images【467421527218735†L89-L96】【600788209180035†L864-L869】.
 
 ## 📦 Installation
 

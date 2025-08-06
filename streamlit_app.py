@@ -21,9 +21,10 @@ README for deployment instructions.
 from __future__ import annotations
 
 import time
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 import requests
+import re
 from bs4 import BeautifulSoup  # type: ignore
 # The Streamlit import is intentionally deferred to within the `main` function.
 # This allows other modules to import `compute_metrics` and
@@ -112,7 +113,310 @@ def compute_metrics(url: str) -> Dict[str, object]:
             internal += 1
     metrics["internal_link_count"] = internal
     metrics["external_link_count"] = external
+
+    # ---------------------------------------------------------------------------
+    # Additional on‑page signals
+    # Many subtle elements influence UX and SEO beyond the basic counts above.  We
+    # capture a few of them here to differentiate the tool from a simple GPT
+    # prompt.  These include canonical/robots tags, social sharing metadata,
+    # structured data, responsive design hints and accessibility attributes.
+
+    # Canonical tag tells search engines which version of a URL to index.  The
+    # canonical tag helps consolidate signals when there are multiple URLs for
+    # the same content【600788209180035†L501-L540】.  We record whether one is
+    # present.
+    canonical_tag = soup.find("link", rel="canonical")
+    metrics["canonical_present"] = bool(canonical_tag and canonical_tag.get("href"))
+
+    # Robots meta tag can instruct search engines how to crawl a page.  We
+    # simply detect its presence.
+    robots_tag = soup.find("meta", attrs={"name": "robots"})
+    metrics["robots_meta_present"] = bool(robots_tag and robots_tag.get("content"))
+
+    # Open Graph tags control how a page appears when shared on social media.  A
+    # complete set of og:title/og:description/og:image tags improves click‑through
+    # rates【600788209180035†L553-L599】.  We record whether each tag exists.
+    metrics["og_title_present"] = bool(soup.find("meta", property="og:title"))
+    metrics["og_description_present"] = bool(
+        soup.find("meta", property="og:description")
+    )
+    metrics["og_image_present"] = bool(soup.find("meta", property="og:image"))
+
+    # Structured data (JSON‑LD) helps search engines understand content and is
+    # associated with improved SERP features and UX【600788209180035†L664-L676】.  We
+    # detect whether any JSON‑LD script is present.
+    metrics["structured_data_present"] = bool(
+        soup.find("script", attrs={"type": "application/ld+json"})
+    )
+
+    # Viewport meta tag indicates responsive design and accessibility.  Its
+    # absence can trigger Google Search Console warnings【600788209180035†L609-L627】.
+    metrics["viewport_present"] = bool(
+        soup.find("meta", attrs={"name": "viewport"})
+    )
+
+    # Accessibility attributes (ARIA).  We compute the ratio of elements with
+    # ARIA attributes to total elements.  This serves as a proxy for how well
+    # interactive components are labelled for assistive technologies.
+    total_elements = 0
+    aria_count = 0
+    for tag in soup.find_all(True):
+        total_elements += 1
+        for attr_name in tag.attrs.keys():
+            if isinstance(attr_name, str) and attr_name.startswith("aria-"):
+                aria_count += 1
+                break
+    metrics["aria_ratio"] = (
+        aria_count / total_elements if total_elements > 0 else 0.0
+    )
+
+    # Lazy loading images improve page performance by deferring off‑screen
+    # downloads.  We compute the fraction of images using loading="lazy".
+    lazy_images = sum(
+        1 for img in images if img.get("loading", "").lower() == "lazy"
+    )
+    metrics["lazy_loading_ratio"] = (
+        lazy_images / len(images) if images else 0.0
+    )
+
+    # ---------------------------------------------------------------------------
+    # Readability and text statistics
+    text = soup.get_text(separator=" ", strip=True)
+    # Basic word, sentence and syllable counts for readability
+    metrics["word_count"] = len(text.split())
+    # Count sentences using ., ! and ? as delimiters
+    metrics["sentence_count"] = text.count(".") + text.count("!") + text.count("?")
+    metrics["syllable_count"] = _count_syllables_in_text(text)
+    metrics["flesch_reading_ease"] = _flesch_reading_ease(
+        metrics["word_count"], metrics["sentence_count"], metrics["syllable_count"]
+    )
+    # Language attribute
+    html_tag = soup.find("html")
+    metrics["lang"] = html_tag.get("lang") if html_tag else None
     return metrics
+
+
+def _count_syllables_in_word(word: str) -> int:
+    """Approximate the number of syllables in an English word.
+
+    Uses a simple heuristic based on vowel groups. Words without vowels are
+    counted as one syllable. Consecutive vowels are treated as a single
+    syllable. A final silent 'e' is not counted.
+    """
+    word = word.lower()
+    vowels = "aeiouy"
+    count = 0
+    prev_is_vowel = False
+    for char in word:
+        if char in vowels:
+            if not prev_is_vowel:
+                count += 1
+            prev_is_vowel = True
+        else:
+            prev_is_vowel = False
+    # Subtract one for silent trailing 'e'
+    if word.endswith("e") and count > 1:
+        count -= 1
+    return count or 1
+
+
+def _count_syllables_in_text(text: str) -> int:
+    """Count approximate syllables in a block of text."""
+    syllables = 0
+    for token in text.split():
+        # Strip non‑alphabetic characters
+        clean = re.sub(r"[^a-zA-Z]", "", token)
+        if clean:
+            syllables += _count_syllables_in_word(clean)
+    return syllables
+
+
+def _flesch_reading_ease(word_count: int, sentence_count: int, syllable_count: int) -> float:
+    """Compute the Flesch reading ease score for English text.
+
+    The formula is: 206.835 - 1.015*(words/sentences) - 84.6*(syllables/words).
+    Returns 0.0 if there are no sentences or words.
+    """
+    if sentence_count == 0 or word_count == 0:
+        return 0.0
+    return round(
+        206.835
+        - 1.015 * (word_count / sentence_count)
+        - 84.6 * (syllable_count / word_count),
+        2,
+    )
+
+
+def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
+    """Evaluate metrics and return a score (0‑100) and improvement suggestions.
+
+    This function applies simple heuristics for SEO and UX best practices. Each
+    deviation deducts points from a starting score of 100. Suggestions are
+    returned explaining how to improve. The score is clipped between 0 and 100.
+
+    :param metrics: The metrics dictionary returned from ``compute_metrics``.
+    :returns: A tuple ``(score, suggestions)``.
+    """
+    score = 100
+    suggestions: List[str] = []
+
+    # Title length
+    title_len = metrics.get("title_length", 0)
+    if title_len == 0:
+        suggestions.append("Add a <title> tag to the page.")
+        score -= 10
+    elif title_len < 30 or title_len > 60:
+        suggestions.append(
+            f"Adjust title length (current {title_len} characters; recommended 30–60)."
+        )
+        score -= 5
+
+    # Meta description
+    meta_len = metrics.get("meta_description_length", 0)
+    if meta_len == 0:
+        suggestions.append("Add a meta description to summarise the page.")
+        score -= 10
+    elif meta_len < 70 or meta_len > 160:
+        suggestions.append(
+            f"Adjust meta description length (current {meta_len} characters; recommended 70–160)."
+        )
+        score -= 5
+
+    # H1 count
+    h1_count = metrics.get("h1_count", 0)
+    if h1_count != 1:
+        suggestions.append(f"Use exactly one H1 heading (current {h1_count}).")
+        score -= 5
+
+    # Images alt ratio
+    img_count = metrics.get("image_count", 0)
+    imgs_with_alt = metrics.get("images_with_alt", 0)
+    if img_count > 0:
+        alt_ratio = imgs_with_alt / img_count
+        if alt_ratio < 0.9:
+            missing = img_count - imgs_with_alt
+            suggestions.append(
+                f"Add alt attributes to images ({missing} of {img_count} missing)."
+            )
+            score -= 5
+
+    # Response time
+    response_time = metrics.get("response_time_seconds", 0.0)
+    if isinstance(response_time, (int, float)) and response_time > 1.0:
+        suggestions.append(
+            f"Improve server response time (currently {response_time:.2f} s > 1 s)."
+        )
+        score -= 5
+
+    # Page size
+    page_size_kb = metrics.get("page_size_bytes", 0) / 1024
+    if isinstance(page_size_kb, (int, float)) and page_size_kb > 1024:
+        suggestions.append(
+            f"Reduce page size (currently {int(page_size_kb)} KB; aim for <1 MB)."
+        )
+        score -= 5
+
+    # Internal vs external links
+    int_links = metrics.get("internal_link_count", 0)
+    ext_links = metrics.get("external_link_count", 0)
+    total_links = metrics.get("link_count", 0)
+    if total_links and ext_links > int_links:
+        suggestions.append("Increase internal linking to strengthen site structure.")
+        score -= 3
+
+    # Readability
+    flesch = metrics.get("flesch_reading_ease", 0)
+    if isinstance(flesch, (int, float)) and flesch < 60:
+        suggestions.append(
+            f"Simplify your copy (Flesch reading ease {flesch}; aim for >60)."
+        )
+        score -= 4
+
+    # Language attribute
+    if not metrics.get("lang"):
+        suggestions.append(
+            "Specify the language on the <html> tag (e.g., lang=\"en\" or lang=\"fr\")."
+        )
+        score -= 2
+
+    # Additional heuristics for extended analysis
+    # -----------------------------------------------------------------------
+    # Canonical tag presence
+    if not metrics.get("canonical_present"):
+        suggestions.append(
+            "Add a rel=\"canonical\" link tag to consolidate duplicate URLs and improve SEO."
+        )
+        score -= 3
+
+    # Robots meta tag
+    if not metrics.get("robots_meta_present"):
+        suggestions.append(
+            "Add a meta robots tag to control how search engines crawl and index the page."
+        )
+        score -= 1
+
+    # Open Graph tags
+    if not metrics.get("og_title_present"):
+        suggestions.append(
+            "Add an Open Graph title (og:title) to improve social sharing previews."
+        )
+        score -= 1
+    if not metrics.get("og_description_present"):
+        suggestions.append(
+            "Add an Open Graph description (og:description) for better link previews."
+        )
+        score -= 1
+    if not metrics.get("og_image_present"):
+        suggestions.append(
+            "Add an Open Graph image (og:image) to control the preview image on social media."
+        )
+        score -= 1
+
+    # Structured data
+    if not metrics.get("structured_data_present"):
+        suggestions.append(
+            "Implement JSON‑LD structured data to help search engines understand your content and win rich snippets."
+        )
+        score -= 3
+
+    # Viewport meta
+    if not metrics.get("viewport_present"):
+        suggestions.append(
+            "Add a responsive viewport meta tag (e.g., <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">)."
+        )
+        score -= 2
+
+    # ARIA ratio (accessibility)
+    aria_ratio = metrics.get("aria_ratio", 0)
+    if isinstance(aria_ratio, (int, float)) and aria_ratio < 0.05:
+        suggestions.append(
+            "Increase the use of ARIA attributes on interactive elements to improve accessibility."
+        )
+        score -= 2
+
+    # Lazy loading images
+    lazy_ratio = metrics.get("lazy_loading_ratio", 0)
+    if (
+        isinstance(lazy_ratio, (int, float))
+        and metrics.get("image_count", 0) > 0
+        and lazy_ratio < 0.5
+    ):
+        suggestions.append(
+            "Enable lazy loading (loading=\"lazy\") on images to improve perceived performance."
+        )
+        score -= 2
+
+    # Heading structure: encourage at least one H2 for content hierarchy
+    h2_count = metrics.get("h2_count", 0)
+    if isinstance(h2_count, int) and h2_count == 0:
+        suggestions.append(
+            "Add H2 headings to structure your content and aid navigation."
+        )
+        score -= 2
+
+    # Final clipping
+    score = max(0, min(100, score))
+    return score, suggestions
 
 
 def compare_metrics(primary: Dict[str, object], competitor: Dict[str, object]) -> Dict[str, object]:
@@ -166,15 +470,33 @@ def main() -> None:
         try:
             with st.spinner("Analyzing primary page..."):
                 primary_metrics = compute_metrics(url)
+            # Evaluate the primary page
+            primary_score, primary_suggestions = evaluate_metrics(primary_metrics)
             st.subheader("Primary Page Metrics")
             st.json(primary_metrics)
+            st.markdown(f"**UX/SEO Score:** {primary_score}/100")
+            if primary_suggestions:
+                st.markdown("**Suggestions to improve:**")
+                for s in primary_suggestions:
+                    st.write("- " + s)
             if competitor_url:
                 with st.spinner("Analyzing competitor page..."):
                     competitor_metrics = compute_metrics(competitor_url)
+                competitor_score, competitor_suggestions = evaluate_metrics(competitor_metrics)
                 st.subheader("Competitor Page Metrics")
                 st.json(competitor_metrics)
+                st.markdown(f"**Competitor UX/SEO Score:** {competitor_score}/100")
+                # Show competitor suggestions
+                if competitor_suggestions:
+                    st.markdown("**Competitor Suggestions:**")
+                    for s in competitor_suggestions:
+                        st.write("- " + s)
+                # Show score difference
+                score_diff = primary_score - competitor_score
+                st.markdown(f"**Score difference (Primary – Competitor):** {score_diff}")
+                # Show metric differences
                 diff = compare_metrics(primary_metrics, competitor_metrics)
-                st.subheader("Differences (Primary – Competitor)")
+                st.subheader("Metric Differences (Primary – Competitor)")
                 st.json(diff)
         except Exception as exc:
             st.error(f"Error during analysis: {exc}")
