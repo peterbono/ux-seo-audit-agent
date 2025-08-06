@@ -82,6 +82,10 @@ def compute_metrics(url: str) -> Dict[str, object]:
         count = len(soup.find_all(f"h{i}"))
         metrics[f"h{i}_count"] = count
 
+    # Capture text of H2 headings for potential content gap analysis
+    h2_tags = soup.find_all("h2")
+    metrics["h2_texts"] = [tag.get_text(strip=True) for tag in h2_tags]
+
     # Images and alt attributes
     images = soup.find_all("img")
     metrics["image_count"] = len(images)
@@ -502,14 +506,24 @@ def generate_heatmap(metrics: Dict[str, object]):
 
     Instead of a true saliency model, this function visualises the relative
     distribution of key elements (headings, images, links, words) using a
-    one‑dimensional heatmap.  The default matplotlib colour map is used to
-    avoid specifying custom colours per guidelines.
+    one‑dimensional heatmap.
+
+    If the ``matplotlib`` or ``numpy`` modules are not available (e.g. on
+    minimal serverless platforms), the function returns ``None`` to signal
+    that no heatmap can be created.  The caller should handle this case
+    gracefully by skipping the chart or displaying a warning.
 
     :param metrics: Metrics dictionary for a page.
-    :returns: A matplotlib figure object ready for rendering.
+    :returns: A matplotlib figure object ready for rendering, or ``None`` if
+              the required modules are missing.
     """
-    import matplotlib.pyplot as plt  # deferred import to avoid unused when not plotting
-    import numpy as np  # type: ignore
+    # Attempt to import plotting libraries at runtime.  If unavailable,
+    # return None so the UI can avoid raising ImportError.
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+        import numpy as np  # type: ignore
+    except ImportError:
+        return None
 
     labels = ["H1", "H2", "H3", "Images", "Links", "Words"]
     values = [
@@ -522,7 +536,7 @@ def generate_heatmap(metrics: Dict[str, object]):
     ]
     data = np.array([values])  # shape (1, n)
     fig, ax = plt.subplots(figsize=(len(labels) * 0.8, 2))
-    cax = ax.imshow(data, aspect="auto")
+    ax.imshow(data, aspect="auto")  # the return value (cax) is unused
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha="right")
     ax.set_yticks([])  # hide y axis labels
@@ -595,6 +609,39 @@ def main() -> None:
         )
 
     st.set_page_config(page_title="UX‑SEO Audit", layout="wide")
+
+    # ---------------------------------------------------------------------
+    # Inject a bit of CSS to improve the visual presentation.  The design
+    # draws inspiration from modern tools like Framer: light background,
+    # rounded panels with gentle shadows and consistent typography.  This
+    # styling is intentionally scoped to elements we add via HTML below.
+    st.markdown(
+        """
+        <style>
+        /* Use a modern sans‑serif font throughout the app */
+        body {font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
+        /* Card container with rounded corners and subtle shadow */
+        .card {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        /* Section header styling */
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        /* Suggestions list styling */
+        .suggestions ul {list-style-type: disc; margin-left: 1rem;}
+        .suggestions li {margin-bottom: 0.35rem;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("UX‑SEO Audit (Lite)")
     st.write(
         "Obtenez un aperçu rapide de l'expérience utilisateur (UX) et du référencement (SEO) "
@@ -622,9 +669,10 @@ def main() -> None:
             # UI layout for primary page
             st.header("Primary Page Results")
             tabs = st.tabs(["Summary", "Heatmap", "Keywords", "Suggestions"])
-            # Summary tab: show key metrics and score
+            # Summary tab: show key metrics and score, wrapped in a card
             with tabs[0]:
-                # Use columns to display metrics nicely
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # Use columns to display metrics in rows of three
                 col1, col2, col3 = st.columns(3)
                 col1.metric("UX/SEO Score", f"{primary_score}/100")
                 col2.metric("Word Count", int(primary_metrics.get("word_count", 0)))
@@ -632,28 +680,42 @@ def main() -> None:
                 col1.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
                 col2.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
                 col3.metric("Tone", str(primary_metrics.get("tone", "unknown")).capitalize())
-                st.subheader("Detailed Metrics")
+                st.markdown("<div class='section-title'>Detailed Metrics</div>", unsafe_allow_html=True)
                 st.json(primary_metrics)
+                st.markdown('</div>', unsafe_allow_html=True)
             # Heatmap tab
             with tabs[1]:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
                 fig = generate_heatmap(primary_metrics)
-                st.pyplot(fig)
+                if fig is not None:
+                    st.pyplot(fig)
+                else:
+                    st.info(
+                        "Matplotlib (or NumPy) is not installed in this environment."
+                        " Heatmap generation is disabled."
+                    )
+                st.markdown('</div>', unsafe_allow_html=True)
             # Keywords tab
             with tabs[2]:
-                st.subheader("Top Keywords")
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>Top Keywords</div>", unsafe_allow_html=True)
                 keywords = primary_metrics.get("top_keywords", [])
                 if keywords:
                     st.table(keywords)
                 else:
                     st.write("No significant keywords extracted.")
+                st.markdown('</div>', unsafe_allow_html=True)
             # Suggestions tab
             with tabs[3]:
-                st.subheader("Suggestions")
+                st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>Suggestions</div>", unsafe_allow_html=True)
                 if primary_suggestions:
-                    for s in primary_suggestions:
-                        st.write("- " + s)
+                    # Use HTML list for better spacing
+                    html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in primary_suggestions) + "</ul>"
+                    st.markdown(html_list, unsafe_allow_html=True)
                 else:
                     st.write("No suggestions – well done!")
+                st.markdown('</div>', unsafe_allow_html=True)
 
             # If competitor provided
             if competitor_url:
@@ -669,30 +731,37 @@ def main() -> None:
                 st.header("Competitor Comparison")
                 cmp_tabs = st.tabs(["Competitor Summary", "Content Gap", "Metric Differences", "Competitor Suggestions"])
                 with cmp_tabs[0]:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Competitor Score", f"{competitor_score}/100", delta=f"{score_diff:+}")
                     c2.metric("Words", int(competitor_metrics.get("word_count", 0)), delta=int(primary_metrics.get("word_count", 0)) - int(competitor_metrics.get("word_count", 0)))
                     c3.metric("Flesch", float(competitor_metrics.get("flesch_reading_ease", 0)), delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)))
-                    # Show competitor metrics
-                    st.subheader("Competitor Metrics")
+                    st.markdown("<div class='section-title'>Competitor Metrics</div>", unsafe_allow_html=True)
                     st.json(competitor_metrics)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 with cmp_tabs[1]:
-                    st.subheader("Content Gap (keywords to target)")
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown("<div class='section-title'>Content Gap (keywords to target)</div>", unsafe_allow_html=True)
                     if gap:
                         st.write(", ".join(sorted(gap)))
                     else:
                         st.write("No obvious keyword gaps detected.")
+                    st.markdown('</div>', unsafe_allow_html=True)
                 with cmp_tabs[2]:
-                    st.subheader("Metric Differences (Primary – Competitor)")
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown("<div class='section-title'>Metric Differences (Primary – Competitor)</div>", unsafe_allow_html=True)
                     diff = compare_metrics(primary_metrics, competitor_metrics)
                     st.json(diff)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 with cmp_tabs[3]:
-                    st.subheader("Competitor Suggestions")
+                    st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
+                    st.markdown("<div class='section-title'>Competitor Suggestions</div>", unsafe_allow_html=True)
                     if competitor_suggestions:
-                        for s in competitor_suggestions:
-                            st.write("- " + s)
+                        html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in competitor_suggestions) + "</ul>"
+                        st.markdown(html_list, unsafe_allow_html=True)
                     else:
                         st.write("No suggestions – competitor page looks strong.")
+                    st.markdown('</div>', unsafe_allow_html=True)
         except Exception as exc:
             st.error(f"Error during analysis: {exc}")
 
