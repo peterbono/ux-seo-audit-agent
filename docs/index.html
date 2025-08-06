@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UX‑SEO Audit Agent</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 2rem;
+        max-width: 800px;
+      }
+      h1 {
+        color: #333;
+      }
+      h2 {
+        margin-top: 2rem;
+        color: #444;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      code {
+        background: #f5f5f5;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+      }
+      a {
+        color: #007acc;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>UX‑SEO Audit Agent</h1>
+    <p>
+      <strong>UX‑SEO Audit Agent</strong> is an open‑source project that
+      automates the assessment of a website’s user experience (UX) and
+      search engine optimisation (SEO). It combines open‑source tools such as
+      <a href="https://developers.google.com/web/tools/lighthouse">Google
+        Lighthouse</a> with custom HTML parsing and optional AI
+      recommendations to deliver a concise audit. You can use this tool to
+      benchmark your site against a competitor, identify quick wins and
+      prioritise improvements.
+    </p>
+    <h2>Features</h2>
+    <ul>
+      <li>Combines UX and SEO metrics in a single report</li>
+      <li>Benchmarks against competitor URLs</li>
+      <li>Runs from the command line and integrates with CI pipelines</li>
+      <li>Optional AI‑generated recommendations via OpenAI</li>
+      <li>Exports data as JSON (extendable to other formats)</li>
+    </ul>
+    <h2>Quick start</h2>
+    <p>Install dependencies and Lighthouse:</p>
+    <pre><code>pip install -r requirements.txt
+npm install -g lighthouse</code></pre>
+    <p>Run an audit:</p>
+    <pre><code>python main.py --url https://example.com --competitor https://competitor.com</code></pre>
+    <p>
+      To enable AI recommendations set the <code>OPENAI_API_KEY</code>
+      environment variable and pass the <code>--use-openai</code> flag.
+    </p>
+    <h2>Repository</h2>
+    <p>
+      View the source code, file an issue or contribute on GitHub:
+      <a href="https://github.com/peterbono/ux-seo-audit-agent">ux‑seo‑audit-agent on GitHub</a>.
+    </p>
+  </body>
+</html>
