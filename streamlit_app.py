@@ -181,9 +181,14 @@ def compute_metrics(url: str) -> Dict[str, object]:
 
     # ---------------------------------------------------------------------------
     # Readability and text statistics
+    # Extract all visible text from the page
     text = soup.get_text(separator=" ", strip=True)
+    # Expose plain text so other functions (e.g. content gap, tone) can reuse it
+    metrics["plain_text"] = text
+
     # Basic word, sentence and syllable counts for readability
-    metrics["word_count"] = len(text.split())
+    words = text.split()
+    metrics["word_count"] = len(words)
     # Count sentences using ., ! and ? as delimiters
     metrics["sentence_count"] = text.count(".") + text.count("!") + text.count("?")
     metrics["syllable_count"] = _count_syllables_in_text(text)
@@ -193,6 +198,46 @@ def compute_metrics(url: str) -> Dict[str, object]:
     # Language attribute
     html_tag = soup.find("html")
     metrics["lang"] = html_tag.get("lang") if html_tag else None
+
+    # ----------------------------------------------------------------------
+    # Tone analysis and keyword extraction
+    # Normalise words: lowercase, strip punctuation
+    cleaned_words: List[str] = []
+    for token in words:
+        # Remove any leading/trailing punctuation
+        cleaned = re.sub(r"[^a-zA-Z0-9]", "", token.lower())
+        if cleaned:
+            cleaned_words.append(cleaned)
+    # Define simple stopwords list (English and a few common French words)
+    stopwords = {
+        "a", "the", "and", "or", "of", "to", "in", "on", "for", "with", "is",
+        "it", "this", "that", "an", "as", "at", "be", "by", "from", "are",
+        "was", "were", "but", "not", "can", "we", "you", "your", "our", "nous",
+        "vous", "pour", "que", "qui", "par", "dans", "les", "des", "une", "un",
+        "le", "la", "et", "du", "de", "en", "se", "au", "aux", "ce", "ces", "sa",
+        "ses", "sur", "plus", "pas", "ne"
+    }
+    filtered_words = [w for w in cleaned_words if w not in stopwords]
+    # Compute top keywords (up to 10) by frequency
+    from collections import Counter
+    counter = Counter(filtered_words)
+    metrics["top_keywords"] = counter.most_common(10)
+    # Pronoun ratio as proxy for informal tone
+    personal_pronouns = {
+        "i", "me", "my", "mine", "myself", "we", "us", "our", "ours", "ourselves",
+        "you", "your", "yours", "yourself", "yourselves"
+    }
+    pronoun_count = sum(1 for w in cleaned_words if w in personal_pronouns)
+    metrics["pronoun_ratio"] = (
+        pronoun_count / len(cleaned_words) if cleaned_words else 0.0
+    )
+    # Count exclamation marks as proxy for tone excitement
+    metrics["exclamation_count"] = text.count("!")
+    # Determine a simplistic tone classification
+    metrics["tone"] = "informal" if (
+        metrics["pronoun_ratio"] > 0.05 or metrics["exclamation_count"] > 2
+    ) else "formal"
+
     return metrics
 
 
@@ -406,6 +451,20 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
         )
         score -= 2
 
+    # Tone checks: high pronoun ratio or many exclamation marks may indicate an overly informal tone
+    pronoun_ratio = metrics.get("pronoun_ratio", 0)
+    exclamations = metrics.get("exclamation_count", 0)
+    if isinstance(pronoun_ratio, (int, float)) and pronoun_ratio > 0.2:
+        suggestions.append(
+            "The copy appears highly informal (many personal pronouns); ensure tone suits your audience."
+        )
+        score -= 1
+    if isinstance(exclamations, int) and exclamations > 3:
+        suggestions.append(
+            "Reduce the number of exclamation marks to maintain a professional tone."
+        )
+        score -= 1
+
     # Heading structure: encourage at least one H2 for content hierarchy
     h2_count = metrics.get("h2_count", 0)
     if isinstance(h2_count, int) and h2_count == 0:
@@ -414,9 +473,94 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
         )
         score -= 2
 
+    # End tone and content heuristics
+
     # Final clipping
     score = max(0, min(100, score))
     return score, suggestions
+
+
+def content_gap(primary: Dict[str, object], competitor: Dict[str, object]) -> List[str]:
+    """Identify keywords present in the competitor page but missing from the primary.
+
+    This simple content gap analysis compares the top keywords extracted from
+    both pages. Any keyword that appears in the competitor's top keywords but
+    not in the primary's top keywords is returned as a suggestion.
+
+    :param primary: Metrics for the primary page.
+    :param competitor: Metrics for the competitor page.
+    :returns: A list of keywords that are potential content opportunities.
+    """
+    primary_keywords = {kw for kw, _ in primary.get("top_keywords", [])}
+    competitor_keywords = {kw for kw, _ in competitor.get("top_keywords", [])}
+    missing = list(competitor_keywords - primary_keywords)
+    return missing
+
+
+def generate_heatmap(metrics: Dict[str, object]):
+    """Generate a simple heatmap figure from page element counts.
+
+    Instead of a true saliency model, this function visualises the relative
+    distribution of key elements (headings, images, links, words) using a
+    one‑dimensional heatmap.  The default matplotlib colour map is used to
+    avoid specifying custom colours per guidelines.
+
+    :param metrics: Metrics dictionary for a page.
+    :returns: A matplotlib figure object ready for rendering.
+    """
+    import matplotlib.pyplot as plt  # deferred import to avoid unused when not plotting
+    import numpy as np  # type: ignore
+
+    labels = ["H1", "H2", "H3", "Images", "Links", "Words"]
+    values = [
+        metrics.get("h1_count", 0),
+        metrics.get("h2_count", 0),
+        metrics.get("h3_count", 0),
+        metrics.get("image_count", 0),
+        metrics.get("link_count", 0),
+        metrics.get("word_count", 0),
+    ]
+    data = np.array([values])  # shape (1, n)
+    fig, ax = plt.subplots(figsize=(len(labels) * 0.8, 2))
+    cax = ax.imshow(data, aspect="auto")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.set_yticks([])  # hide y axis labels
+    ax.set_title("Relative distribution of page elements")
+    # Add text annotations for values
+    for i, val in enumerate(values):
+        ax.text(i, 0, f"{val}", va="center", ha="center", fontsize=9)
+    return fig
+
+
+def check_gambling_compliance(url: str, metrics: Dict[str, object]) -> List[str]:
+    """Check gambling‑site compliance elements such as responsible gambling notices.
+
+    If the domain suggests a gambling or betting site (keywords like 'casino',
+    'poker', 'bet', 'game'), ensure that the page contains typical warnings
+    about responsible gambling and age restrictions.  This function returns
+    suggestions if required notices are missing.
+
+    :param url: The URL of the page being analysed.
+    :param metrics: Metrics dictionary containing the plain text.
+    :returns: A list of additional suggestions related to responsible gambling.
+    """
+    domain = urlparse(url).netloc.lower()
+    gambling_keywords = ["casino", "poker", "bet", "gambling", "jeu"]
+    if not any(kw in domain for kw in gambling_keywords):
+        return []
+    text = metrics.get("plain_text", "").lower()
+    suggestions: List[str] = []
+    # Warnings expected: responsible gambling notice and age restrictions
+    if "responsible" not in text and "jouez" not in text:
+        suggestions.append(
+            "Include a notice about playing responsibly and support for problem gamblers."
+        )
+    if not any(age in text for age in ["18+", "21+", "18 ans", "21 ans"]):
+        suggestions.append(
+            "Display a clear age restriction (e.g., 18+ or 21+) to comply with regulations."
+        )
+    return suggestions
 
 
 def compare_metrics(primary: Dict[str, object], competitor: Dict[str, object]) -> Dict[str, object]:
@@ -443,20 +587,19 @@ def compare_metrics(primary: Dict[str, object], competitor: Dict[str, object]) -
 
 
 def main() -> None:
-    """Run the Streamlit app."""
+    """Run the Streamlit app with an enhanced UI and additional analyses."""
     if st is None:
         raise RuntimeError(
             "Streamlit is not installed. Run this app via `streamlit run` or "
             "install streamlit (pip install streamlit)."
         )
 
-    # At this point Streamlit is importable
     st.set_page_config(page_title="UX‑SEO Audit", layout="wide")
     st.title("UX‑SEO Audit (Lite)")
     st.write(
-        "Enter a website URL to get a quick UX/SEO overview. "
-        "Optionally provide a competitor URL for comparison. This tool uses a simple "
-        "Python analysis instead of Lighthouse so it runs quickly and can be deployed for free."
+        "Obtenez un aperçu rapide de l'expérience utilisateur (UX) et du référencement (SEO) "
+        "d'une page en entrant son URL. Facultativement, comparez‑la à un concurrent. "
+        "Cette version légère fonctionne sans Lighthouse pour garantir un temps d'attente court et un hébergement gratuit."
     )
 
     url = st.text_input("Page URL", "https://example.com")
@@ -468,36 +611,88 @@ def main() -> None:
             st.error("Please enter a valid URL.")
             return
         try:
+            # Analyse primaire
             with st.spinner("Analyzing primary page..."):
                 primary_metrics = compute_metrics(url)
-            # Evaluate the primary page
             primary_score, primary_suggestions = evaluate_metrics(primary_metrics)
-            st.subheader("Primary Page Metrics")
-            st.json(primary_metrics)
-            st.markdown(f"**UX/SEO Score:** {primary_score}/100")
-            if primary_suggestions:
-                st.markdown("**Suggestions to improve:**")
-                for s in primary_suggestions:
-                    st.write("- " + s)
+            # Domain‑specific compliance
+            primary_gamble_suggestions = check_gambling_compliance(url, primary_metrics)
+            primary_suggestions.extend(primary_gamble_suggestions)
+
+            # UI layout for primary page
+            st.header("Primary Page Results")
+            tabs = st.tabs(["Summary", "Heatmap", "Keywords", "Suggestions"])
+            # Summary tab: show key metrics and score
+            with tabs[0]:
+                # Use columns to display metrics nicely
+                col1, col2, col3 = st.columns(3)
+                col1.metric("UX/SEO Score", f"{primary_score}/100")
+                col2.metric("Word Count", int(primary_metrics.get("word_count", 0)))
+                col3.metric("Flesch Reading Ease", float(primary_metrics.get("flesch_reading_ease", 0)))
+                col1.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
+                col2.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
+                col3.metric("Tone", str(primary_metrics.get("tone", "unknown")).capitalize())
+                st.subheader("Detailed Metrics")
+                st.json(primary_metrics)
+            # Heatmap tab
+            with tabs[1]:
+                fig = generate_heatmap(primary_metrics)
+                st.pyplot(fig)
+            # Keywords tab
+            with tabs[2]:
+                st.subheader("Top Keywords")
+                keywords = primary_metrics.get("top_keywords", [])
+                if keywords:
+                    st.table(keywords)
+                else:
+                    st.write("No significant keywords extracted.")
+            # Suggestions tab
+            with tabs[3]:
+                st.subheader("Suggestions")
+                if primary_suggestions:
+                    for s in primary_suggestions:
+                        st.write("- " + s)
+                else:
+                    st.write("No suggestions – well done!")
+
+            # If competitor provided
             if competitor_url:
                 with st.spinner("Analyzing competitor page..."):
                     competitor_metrics = compute_metrics(competitor_url)
                 competitor_score, competitor_suggestions = evaluate_metrics(competitor_metrics)
-                st.subheader("Competitor Page Metrics")
-                st.json(competitor_metrics)
-                st.markdown(f"**Competitor UX/SEO Score:** {competitor_score}/100")
-                # Show competitor suggestions
-                if competitor_suggestions:
-                    st.markdown("**Competitor Suggestions:**")
-                    for s in competitor_suggestions:
-                        st.write("- " + s)
-                # Show score difference
+                competitor_gamble_suggestions = check_gambling_compliance(competitor_url, competitor_metrics)
+                competitor_suggestions.extend(competitor_gamble_suggestions)
+                # Content gap analysis
+                gap = content_gap(primary_metrics, competitor_metrics)
+                # Score difference
                 score_diff = primary_score - competitor_score
-                st.markdown(f"**Score difference (Primary – Competitor):** {score_diff}")
-                # Show metric differences
-                diff = compare_metrics(primary_metrics, competitor_metrics)
-                st.subheader("Metric Differences (Primary – Competitor)")
-                st.json(diff)
+                st.header("Competitor Comparison")
+                cmp_tabs = st.tabs(["Competitor Summary", "Content Gap", "Metric Differences", "Competitor Suggestions"])
+                with cmp_tabs[0]:
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Competitor Score", f"{competitor_score}/100", delta=f"{score_diff:+}")
+                    c2.metric("Words", int(competitor_metrics.get("word_count", 0)), delta=int(primary_metrics.get("word_count", 0)) - int(competitor_metrics.get("word_count", 0)))
+                    c3.metric("Flesch", float(competitor_metrics.get("flesch_reading_ease", 0)), delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)))
+                    # Show competitor metrics
+                    st.subheader("Competitor Metrics")
+                    st.json(competitor_metrics)
+                with cmp_tabs[1]:
+                    st.subheader("Content Gap (keywords to target)")
+                    if gap:
+                        st.write(", ".join(sorted(gap)))
+                    else:
+                        st.write("No obvious keyword gaps detected.")
+                with cmp_tabs[2]:
+                    st.subheader("Metric Differences (Primary – Competitor)")
+                    diff = compare_metrics(primary_metrics, competitor_metrics)
+                    st.json(diff)
+                with cmp_tabs[3]:
+                    st.subheader("Competitor Suggestions")
+                    if competitor_suggestions:
+                        for s in competitor_suggestions:
+                            st.write("- " + s)
+                    else:
+                        st.write("No suggestions – competitor page looks strong.")
         except Exception as exc:
             st.error(f"Error during analysis: {exc}")
 
