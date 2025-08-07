@@ -55,25 +55,33 @@ additional analyses:
   performance metrics in one report.  The lightweight analyser extracts
   titles, meta descriptions, headings, links, images and alt text and
   measures response time and page weight.  It also detects canonical
-  tags, robots meta, Open Graph metadata, structured data, responsive
-  viewport settings and ARIA attributes for accessibility.  In addition,
-  it computes readability (Flesch reading ease), measures the prevalence of
-  personal pronouns and exclamation points to infer tone, extracts the
-  top keywords on the page and builds two types of heatmaps: a simple
-  element distribution heatmap and an optional saliency heatmap.  The
-  saliency heatmap predicts where a reader’s attention might land by
-  analysing visual contrast and composition, providing a quick proxy for
-  eye‑tracking.  These extra signals go beyond a simple GPT prompt to
-  provide concrete data for improvement.
+  tags, robots meta, Open Graph metadata, structured data, responsive
+  viewport settings and ARIA attributes for accessibility.  The analyser
+  looks for semantic landmarks like `<nav>`, `<header>`, `<main>` and
+  `<footer>` and flags their absence, since these elements help
+  search engines and assistive technologies understand page structure.
+  In addition, it computes readability (Flesch reading ease), measures
+  the prevalence of personal pronouns and exclamation points to infer
+  tone, extracts the top keywords on the page and builds two types of
+  heatmaps: a simple element distribution chart and an optional
+  **saliency heatmap**.  The saliency heatmap overlays a predicted
+  attention map on top of an uploaded screenshot, highlighting where a
+  viewer’s gaze may focus based on visual contrast and composition.
+  These extra signals go beyond a simple GPT prompt to provide
+  concrete data for improvement.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
- - **Content gap analysis** – highlights important keywords present on a
-   competitor site but missing on your own, giving you a list of topics to
-   address when expanding content.
+ - **Content gap analysis** – highlights important keywords and H2
+   headings present on a competitor site but missing on your own,
+   giving you a list of topics and structural sections to address when
+   expanding content.
  - **Domain‑specific compliance** – detects if a site appears to belong to the
    gambling or betting sector (e.g. poker, casino, jeux d’argent) and
    reminds you to include responsible gambling notices and age restrictions
    where required.
+ - **Semantic and accessibility checks** – notes missing `<nav>`, `<header>`,
+   `<main>` or `<footer>` elements and low ratios of ARIA labels,
+   encouraging better structure and inclusivity.
 - **Automated workflow** – runs headlessly via command line and can be
   integrated into CI pipelines.
 - **Extensible prompts** – prompts for OpenAI can be customised to

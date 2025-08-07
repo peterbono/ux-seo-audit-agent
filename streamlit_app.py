@@ -185,6 +185,17 @@ def compute_metrics(url: str) -> Dict[str, object]:
     )
 
     # ---------------------------------------------------------------------------
+    # Semantic HTML landmarks
+    # Semantic landmarks like <nav>, <header>, <main> and <footer> help
+    # assistive technologies and improve overall structure.  We record
+    # whether these elements are present.  Missing landmarks may indicate
+    # accessibility or structural issues.
+    metrics["nav_present"] = bool(soup.find("nav"))
+    metrics["header_present"] = bool(soup.find("header"))
+    metrics["main_present"] = bool(soup.find("main"))
+    metrics["footer_present"] = bool(soup.find("footer"))
+
+    # ---------------------------------------------------------------------------
     # Readability and text statistics
     # Extract all visible text from the page
     text = soup.get_text(separator=" ", strip=True)
@@ -478,6 +489,28 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
         )
         score -= 2
 
+    # Semantic landmarks: nav, header, main, footer
+    if not metrics.get("nav_present"):
+        suggestions.append(
+            "Add a <nav> landmark to define the main navigation region."
+        )
+        score -= 1
+    if not metrics.get("header_present"):
+        suggestions.append(
+            "Include a <header> element to group introductory content and site identity."
+        )
+        score -= 1
+    if not metrics.get("main_present"):
+        suggestions.append(
+            "Wrap the primary content in a <main> element to improve accessibility."
+        )
+        score -= 1
+    if not metrics.get("footer_present"):
+        suggestions.append(
+            "Add a <footer> element to contain footer information and navigation."
+        )
+        score -= 1
+
     # End tone and content heuristics
 
     # Final clipping
@@ -485,21 +518,34 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
     return score, suggestions
 
 
-def content_gap(primary: Dict[str, object], competitor: Dict[str, object]) -> List[str]:
-    """Identify keywords present in the competitor page but missing from the primary.
+def content_gap(primary: Dict[str, object], competitor: Dict[str, object]) -> Dict[str, List[str]]:
+    """Identify content gaps between the primary and competitor pages.
 
-    This simple content gap analysis compares the top keywords extracted from
-    both pages. Any keyword that appears in the competitor's top keywords but
-    not in the primary's top keywords is returned as a suggestion.
+    The analysis considers both the top keywords extracted from each page
+    and the H2 headings used.  Keywords or headings that appear on the
+    competitor's page but not on the primary page are treated as
+    opportunities for improvement.  This function returns a dictionary
+    with two keys: ``keywords`` and ``headings``, each mapping to a list
+    of missing terms.
 
     :param primary: Metrics for the primary page.
     :param competitor: Metrics for the competitor page.
-    :returns: A list of keywords that are potential content opportunities.
+    :returns: A dict ``{"keywords": [...], "headings": [...]}`` where each
+              list contains items present on the competitor page but not on the
+              primary.
     """
+    # Top keywords difference
     primary_keywords = {kw for kw, _ in primary.get("top_keywords", [])}
     competitor_keywords = {kw for kw, _ in competitor.get("top_keywords", [])}
-    missing = list(competitor_keywords - primary_keywords)
-    return missing
+    missing_keywords = list(competitor_keywords - primary_keywords)
+    # Heading differences (case‑insensitive comparison)
+    primary_headings = {h.lower() for h in primary.get("h2_texts", [])}
+    competitor_headings = {h.lower() for h in competitor.get("h2_texts", [])}
+    missing_headings = [h for h in competitor_headings if h not in primary_headings]
+    return {
+        "keywords": sorted(missing_keywords),
+        "headings": sorted(missing_headings),
+    }
 
 
 def generate_heatmap(metrics: Dict[str, object]):
@@ -604,10 +650,20 @@ def generate_saliency_heatmap(image_bytes: bytes):
         return None
     img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     saliency_map = _spectral_residual_saliency(img_bgr)
-    fig, ax = plt.subplots(figsize=(4, 4))
-    ax.imshow(saliency_map, cmap="hot")
-    ax.axis("off")
-    ax.set_title("Predicted visual saliency")
+    # Display original and saliency overlay side by side.  Normalise saliency for overlay.
+    saliency_norm = saliency_map
+    # Create two subplots: original screenshot and saliency overlay on top of original
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    # Original image
+    axes[0].imshow(img)
+    axes[0].axis("off")
+    axes[0].set_title("Capture originale")
+    # Overlay: show the original image with saliency map overlay as a heatmap
+    axes[1].imshow(img)
+    axes[1].imshow(saliency_norm, cmap="hot", alpha=0.6)
+    axes[1].axis("off")
+    axes[1].set_title("Carte de saillance")
+    fig.suptitle("Analyse prédite de l'attention visuelle", fontsize=10)
     return fig
 
 
@@ -682,8 +738,8 @@ def main() -> None:
     st.markdown(
         """
         <style>
-        /* Use a modern sans‑serif font throughout the app */
-        body {font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
+        /* Base styles: use a clean sans‑serif font and light background */
+        html, body, .main, .stApp {background-color: #f9fafb; color: #111827; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
         /* Card container with rounded corners and subtle shadow */
         .card {
             background-color: #ffffff;
@@ -822,11 +878,24 @@ def main() -> None:
                     st.markdown('</div>', unsafe_allow_html=True)
                 with cmp_tabs[1]:
                     st.markdown('<div class="card">', unsafe_allow_html=True)
-                    st.markdown("<div class='section-title'>Content Gap (keywords to target)</div>", unsafe_allow_html=True)
-                    if gap:
-                        st.write(", ".join(sorted(gap)))
+                    st.markdown("<div class='section-title'>Content Gap Analysis</div>", unsafe_allow_html=True)
+                    # Display missing keywords and headings separately.  Use Streamlit columns for clarity.
+                    missing_kw = gap.get("keywords", [])
+                    missing_h2 = gap.get("headings", [])
+                    if not missing_kw and not missing_h2:
+                        st.write("No significant content gaps detected – your page covers similar topics.")
                     else:
-                        st.write("No obvious keyword gaps detected.")
+                        kw_col, h_col = st.columns(2)
+                        kw_col.subheader("Mots‑clés manquants")
+                        if missing_kw:
+                            kw_col.write(", ".join(missing_kw))
+                        else:
+                            kw_col.write("Aucun mot‑clé manquant.")
+                        h_col.subheader("Rubriques H2 manquantes")
+                        if missing_h2:
+                            h_col.write("; ".join(missing_h2))
+                        else:
+                            h_col.write("Aucune rubrique manquante.")
                     st.markdown('</div>', unsafe_allow_html=True)
                 with cmp_tabs[2]:
                     st.markdown('<div class="card">', unsafe_allow_html=True)
