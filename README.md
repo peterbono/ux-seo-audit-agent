@@ -111,17 +111,19 @@ additional analyses:
   highlighting where the competitor performs better (e.g., more
   prominent CTAs or stronger trust signals).
 
-  - **Improved result presentation** – the Streamlit interface now
-    accompanies each numeric score with a qualitative label (e.g. *Excellent*,
-    *Good*, *Fair*, *Poor*) so you can quickly gauge performance without
-    interpreting the raw number.  Progress bars sit underneath each high‑level
-    score (UX/SEO, layout and business), showing at a glance how close the
-    page is to the maximum 100.  When you analyse a competitor, a bar chart
-    compares the three scores side by side so you can immediately spot
-    relative strengths and weaknesses.  Detailed raw metrics and lists of
-    calls‑to‑action or trust keywords are tucked away behind expanders, keeping
-    the main view clean while still providing full access to the data when
-    needed.
+  - **Improved result presentation** – numeric scores are now paired with
+    qualitative labels (e.g. *Excellent*, *Good*, *Fair*, *Poor*) to help
+    readers instantly interpret their meaning.  Rather than cluttering the
+    view with progress bars, the scores stand alone and are coloured via
+    labels.  When you analyse a competitor, a small bar chart still
+    compares the three high‑level scores (UX/SEO, layout and business) side
+    by side so you can immediately spot relative strengths and weaknesses.
+    Detailed raw metrics (including all extracted HTML counts and ratios)
+    are no longer displayed by default; they remain accessible in
+    collapsible sections or can be omitted entirely, keeping the main view
+    focused on actionable insights.  The **Keywords** tab now shows both
+    the most frequent single‑word keywords and the most common
+    two‑word phrases to reveal deeper patterns in your content.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -155,7 +157,7 @@ presence of a single H1, alt text ratio, internal/external link
   tag, robots meta, Open Graph tags, JSON‑LD structured data, viewport
   meta, ARIA usage, lazy loading).  It also measures the prevalence of
   personal pronouns and exclamation points to infer tone.  The tool
-  extracts the top keywords on the page and compares them against a
+  extracts the top keywords and the most common two‑word phrases on the page and compares them against a
   competitor to highlight content gaps.  It calculates a **Layout Score**
   along with a summary of how many headings, images and links appear per
   thousand words and counts how many semantic landmarks (nav, header,

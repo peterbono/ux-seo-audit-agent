@@ -357,6 +357,14 @@ def compute_metrics(url: str) -> Dict[str, object]:
     from collections import Counter
     counter = Counter(filtered_words)
     metrics["top_keywords"] = counter.most_common(10)
+    # Also compute the most common bigrams (two‑word phrases) to give
+    # a sense of important phrases beyond single words.  We generate
+    # adjacent pairs from the filtered word list and tally them.  The
+    # bigrams are stored as strings (e.g. "online poker") with counts.
+    bigram_counts = Counter(zip(filtered_words, filtered_words[1:]))
+    metrics["top_bigrams"] = [
+        (f"{w1} {w2}", count) for (w1, w2), count in bigram_counts.most_common(10)
+    ]
     # Pronoun ratio as proxy for informal tone
     personal_pronouns = {
         "i", "me", "my", "mine", "myself", "we", "us", "our", "ours", "ourselves",
@@ -1364,11 +1372,13 @@ def main() -> None:
                 "Growth",
                 "Suggestions",
             ])
-            # Summary tab: show key metrics and scores, wrapped in a card
+            # Summary tab: show key metrics and scores.  We no longer wrap the
+            # summary in a custom card or display raw metrics, keeping the
+            # interface clean and focused on actionable information.
             with tabs[0]:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                # Use two rows of columns to summarise the most important metrics.  A qualitative label
-                # accompanies each score so that users don't need to interpret the raw number.
+                # Use two rows of columns to summarise the most important metrics.  A
+                # qualitative label accompanies each score so that users don't need
+                # to interpret the raw number.
                 row1_col1, row1_col2, row1_col3 = st.columns(3)
                 row1_col1.metric("UX/SEO Score", f"{primary_score}/100", _score_label(primary_score))
                 row1_col2.metric("Layout Score", f"{layout_score}/100", _score_label(layout_score))
@@ -1380,17 +1390,14 @@ def main() -> None:
                 row3_col1, row3_col2, row3_col3 = st.columns(3)
                 row3_col1.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
                 row3_col2.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
-                row3_col3.metric("Internal Links / External", f"{int(primary_metrics.get('internal_link_count', 0))}/{int(primary_metrics.get('external_link_count', 0))}")
-                # Hide the detailed raw metrics behind an expander so the summary stays clean.
-                with st.expander("Show all raw metrics", expanded=False):
-                    st.json(primary_metrics)
-                # Note: previously a set of progress bars were used here to
-                # visualise how close each score was to 100. These have been removed
-                # to simplify the interface and avoid unnecessary graphical noise.
-                st.markdown('</div>', unsafe_allow_html=True)
+                row3_col3.metric(
+                    "Internal Links / External",
+                    f"{int(primary_metrics.get('internal_link_count', 0))}/{int(primary_metrics.get('external_link_count', 0))}",
+                )
             # Structure tab
             with tabs[1]:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # Structure tab: show layout and visual hierarchy metrics without a custom
+                # card wrapper.  Titles and metrics are displayed directly.
                 st.markdown("<div class='section-title'>Layout & Visual Hierarchy</div>", unsafe_allow_html=True)
                 # Show ratios and landmark count in columns
                 lc1, lc2, lc3, lc4 = st.columns(4)
@@ -1423,30 +1430,43 @@ def main() -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                st.markdown('</div>', unsafe_allow_html=True)
             # Keywords tab
             with tabs[2]:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.markdown("<div class='section-title'>Top Keywords</div>", unsafe_allow_html=True)
+                # Display top single‑word and two‑word phrases.  Showing both
+                # allows users to identify key themes and combinations that appear
+                # frequently in the content.  If nothing meaningful is found,
+                # provide a friendly message instead of an empty table.
+                st.markdown("<div class='section-title'>Top Keywords & Phrases</div>", unsafe_allow_html=True)
                 keywords = primary_metrics.get("top_keywords", [])
+                bigrams = primary_metrics.get("top_bigrams", [])
                 if keywords:
-                    st.table(keywords)
+                    # Create a two‑column layout: left for single words, right for bigrams
+                    kw_col, big_col = st.columns(2)
+                    kw_col.subheader("Mots clés (1 mot)")
+                    kw_col.table(keywords)
+                    if bigrams:
+                        big_col.subheader("Phrases (2 mots)")
+                        big_col.table(bigrams)
+                    else:
+                        big_col.write("Pas de phrases pertinentes trouvées.")
                 else:
-                    st.write("No significant keywords extracted.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.write("Aucun mot significatif n'a été extrait.")
             # Conversion tab
             with tabs[3]:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # Conversion tab: summarise the number of CTAs, trust signals and forms
+                # found on the page.  We removed the delta parameter to avoid
+                # showing arrows with plus signs, which confused users.  An
+                # expander allows users to view the actual CTA and trust texts if
+                # desired.
                 st.markdown("<div class='section-title'>Conversion & Trust</div>", unsafe_allow_html=True)
                 cc, tc, fc = st.columns(3)
                 cta_count = int(primary_metrics.get("cta_count", 0))
                 trust_count = int(primary_metrics.get("trust_keyword_count", 0))
                 form_count = int(primary_metrics.get("form_count", 0))
-                cc.metric("CTA count", cta_count, "+" if cta_count > 0 else "")
-                tc.metric("Trust signals", trust_count, "+" if trust_count > 0 else "")
-                fc.metric("Forms", form_count, "+" if form_count > 0 else "")
-                # Show details: CTA texts and trust keywords
-                # Show details in an expander to keep the main view uncluttered.
+                cc.metric("CTA count", cta_count)
+                tc.metric("Trust signals", trust_count)
+                fc.metric("Forms", form_count)
+                # Show details: CTA texts and trust keywords in an optional expander
                 if primary_metrics.get("cta_texts") or primary_metrics.get("trust_keywords_found"):
                     with st.expander("Voir les textes des CTA et signaux de confiance", expanded=False):
                         if primary_metrics.get("cta_texts"):
@@ -1455,11 +1475,12 @@ def main() -> None:
                         if primary_metrics.get("trust_keywords_found"):
                             st.markdown("**Mots‑clés de confiance trouvés**")
                             st.write(", ".join(primary_metrics.get("trust_keywords_found", [])))
-                st.markdown('</div>', unsafe_allow_html=True)
 
             # Growth & Business tab
             with tabs[4]:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # Growth & Business tab: present key performance indicators without a
+                # custom card.  Targets are included in subtitles to make clear
+                # what constitutes a good range.
                 st.markdown("<div class='section-title'>Growth & Business</div>", unsafe_allow_html=True)
                 # Compute business score, ratios and suggestions
                 biz_score, biz_ratios, biz_suggestions = business_analysis(primary_metrics)
@@ -1543,22 +1564,38 @@ def main() -> None:
                 ])
                 # Competitor summary
                 with cmp_tabs[0]:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    # Competitor summary tab: show comparative metrics and a
+                    # high‑level bar chart, without wrapping everything in a
+                    # custom card.  Delta values indicate the difference
+                    # relative to your page.  The chart is optional and falls
+                    # back gracefully if matplotlib is not available.
+                    st.markdown("<div class='section-title'>Competitor Summary</div>", unsafe_allow_html=True)
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Competitor Score", f"{competitor_score}/100", delta=f"{score_diff:+}")
                     c2.metric("Layout Score", f"{competitor_layout_score}/100", delta=f"{layout_diff:+}")
-                    c3.metric("Words", int(competitor_metrics.get("word_count", 0)), delta=int(primary_metrics.get("word_count", 0)) - int(competitor_metrics.get("word_count", 0)))
+                    c3.metric(
+                        "Words",
+                        int(competitor_metrics.get("word_count", 0)),
+                        delta=int(primary_metrics.get("word_count", 0)) - int(competitor_metrics.get("word_count", 0)),
+                    )
                     # Additional row for readability and response time
                     c4, c5, c6 = st.columns(3)
-                    c4.metric("Flesch", float(competitor_metrics.get("flesch_reading_ease", 0)), delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)))
-                    c5.metric("Response Time (s)", float(competitor_metrics.get("response_time_seconds", 0)), delta=float(primary_metrics.get("response_time_seconds", 0)) - float(competitor_metrics.get("response_time_seconds", 0)))
-                    c6.metric("Links", int(competitor_metrics.get("link_count", 0)), delta=int(primary_metrics.get("link_count", 0)) - int(competitor_metrics.get("link_count", 0)))
-                    # After showing the basic metrics, include a simple bar chart
-                    # comparing the three high‑level scores (UX/SEO, layout and business)
-                    # between your page and the competitor.  The chart helps visualise
-                    # relative strengths at a glance.  It is generated with
-                    # Matplotlib and NumPy if available; if the libraries are not
-                    # installed, the chart is skipped silently.
+                    c4.metric(
+                        "Flesch",
+                        float(competitor_metrics.get("flesch_reading_ease", 0)),
+                        delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)),
+                    )
+                    c5.metric(
+                        "Response Time (s)",
+                        float(competitor_metrics.get("response_time_seconds", 0)),
+                        delta=float(primary_metrics.get("response_time_seconds", 0)) - float(competitor_metrics.get("response_time_seconds", 0)),
+                    )
+                    c6.metric(
+                        "Links",
+                        int(competitor_metrics.get("link_count", 0)),
+                        delta=int(primary_metrics.get("link_count", 0)) - int(competitor_metrics.get("link_count", 0)),
+                    )
+                    # Bar chart comparing the three high‑level scores
                     try:
                         import numpy as np  # type: ignore
                         import matplotlib.pyplot as plt  # type: ignore
@@ -1577,17 +1614,14 @@ def main() -> None:
                         ax.legend()
                         st.pyplot(fig)
                     except Exception:
-                        # If Matplotlib or NumPy are unavailable, fall back to displaying
-                        # a textual note instead of a chart.  We avoid raising an
-                        # exception so the interface continues to work on lightweight
-                        # deployments.
                         st.info("Score comparison chart unavailable (Matplotlib not installed).")
-                    st.markdown("<div class='section-title'>Competitor Metrics</div>", unsafe_allow_html=True)
-                    st.json(competitor_metrics)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    # Optionally expose the full competitor metrics in a collapsed section
+                    if competitor_metrics:
+                        with st.expander("Afficher tous les métriques du concurrent", expanded=False):
+                            st.json(competitor_metrics)
                 # Content gap analysis tab
                 with cmp_tabs[1]:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    # Content gap analysis tab: display missing keywords and H2 headings without custom card wrappers
                     st.markdown("<div class='section-title'>Content Gap Analysis</div>", unsafe_allow_html=True)
                     missing_kw = gap.get("keywords", [])
                     missing_h2 = gap.get("headings", [])
@@ -1605,10 +1639,9 @@ def main() -> None:
                             h_col.write("; ".join(missing_h2))
                         else:
                             h_col.write("Aucune rubrique manquante.")
-                    st.markdown('</div>', unsafe_allow_html=True)
                 # Metric differences tab
                 with cmp_tabs[2]:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    # Metric differences tab: show differences without custom card wrappers
                     st.markdown("<div class='section-title'>Metric Differences (Primary – Competitor)</div>", unsafe_allow_html=True)
                     diff = compare_metrics(primary_metrics, competitor_metrics)
                     # Include layout ratios differences for completeness
@@ -1618,10 +1651,11 @@ def main() -> None:
                     diff["link_ratio_difference"] = layout_ratios.get("link_ratio", 0) - competitor_layout_ratios.get("link_ratio", 0)
                     diff["semantic_landmark_difference"] = layout_ratios.get("landmark_count", 0) - competitor_layout_ratios.get("landmark_count", 0)
                     st.json(diff)
-                    st.markdown('</div>', unsafe_allow_html=True)
                 # Conversion tab
                 with cmp_tabs[3]:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    # Competitor conversion & trust tab: summarise CTA, trust and forms without
+                    # using a custom card wrapper.  Deltas indicate how your page
+                    # compares to the competitor.
                     st.markdown("<div class='section-title'>Conversion & Trust</div>", unsafe_allow_html=True)
                     # Display competitor metrics and differences relative to primary
                     cc1, cc2, cc3 = st.columns(3)
@@ -1643,11 +1677,12 @@ def main() -> None:
                             if competitor_metrics.get("trust_keywords_found"):
                                 st.markdown("**Mots‑clés de confiance trouvés**")
                                 st.write(", ".join(competitor_metrics.get("trust_keywords_found", [])))
-                    st.markdown('</div>', unsafe_allow_html=True)
 
                 # Growth & Business tab
                 with cmp_tabs[4]:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    # Competitor growth & business tab: display KPIs and deltas without
+                    # a custom card wrapper.  Targets are omitted here because
+                    # deltas provide the context relative to your page.
                     st.markdown("<div class='section-title'>Growth & Business</div>", unsafe_allow_html=True)
                     # Compute competitor business analysis
                     cmp_biz_score, cmp_biz_ratios, cmp_biz_suggestions = business_analysis(competitor_metrics)
@@ -1681,10 +1716,9 @@ def main() -> None:
                     )
                     # Append competitor business suggestions to competitor suggestions list
                     competitor_suggestions.extend(cmp_biz_suggestions)
-                    st.markdown('</div>', unsafe_allow_html=True)
                 # Competitor suggestions tab
                 with cmp_tabs[5]:
-                    st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
+                    # Competitor suggestions tab: group suggestions by zone without custom card wrappers
                     st.markdown("<div class='section-title'>Competitor Suggestions</div>", unsafe_allow_html=True)
                     if competitor_suggestions:
                         # Group competitor suggestions into zones without competitor examples
@@ -1700,7 +1734,6 @@ def main() -> None:
                             st.write("No suggestions for the competitor – they are doing quite well!")
                     else:
                         st.write("No suggestions – competitor page looks strong.")
-                    st.markdown('</div>', unsafe_allow_html=True)
         except Exception as exc:
             st.error(f"Error during analysis: {exc}")
 
