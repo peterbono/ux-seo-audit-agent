@@ -376,6 +376,127 @@ def compute_metrics(url: str) -> Dict[str, object]:
     return metrics
 
 
+def business_analysis(metrics: Dict[str, object]) -> Tuple[int, Dict[str, float], List[str]]:
+    """Evaluate business‑oriented KPIs and return a score, ratios and suggestions.
+
+    This function interprets counts of conversion and growth signals—CTAs,
+    trust keywords, forms, social proof, promotions, benefits, comparisons,
+    recommendations and FAQs—to produce a business score between 0 and 100.
+    Ratios per 1000 words help normalise counts across pages of different
+    lengths. Suggestions are generated when ratios fall outside typical
+    ranges. The aim is to provide concrete actions that maximise
+    conversion potential and growth for marketing or affiliate sites.
+
+    :param metrics: Metrics dictionary from ``compute_metrics``.
+    :returns: ``(score, ratios, suggestions)`` where ``score`` is an
+              integer between 0 and 100, ``ratios`` maps descriptive
+              keys (e.g., "cta_per_1000_words") to floats, and
+              ``suggestions`` is a list of improvement recommendations.
+    """
+    score = 100
+    suggestions: List[str] = []
+    word_count = max(1, int(metrics.get("word_count", 0)))
+    # Calculate ratios per 1000 words for normalization
+    cta_count = int(metrics.get("cta_count", 0))
+    trust_count = int(metrics.get("trust_keyword_count", 0))
+    form_count = int(metrics.get("form_count", 0))
+    social_count = int(metrics.get("social_proof_count", 0))
+    promo_count = int(metrics.get("promo_count", 0))
+    benefit_count = int(metrics.get("benefit_count", 0))
+    comparison_count = int(metrics.get("comparison_count", 0))
+    recommendation_count = int(metrics.get("recommendation_count", 0))
+    faq_present = bool(metrics.get("faq_present"))
+    search_present = bool(metrics.get("search_present"))
+    # Ratios per 1000 words
+    cta_ratio = (cta_count / word_count) * 1000
+    trust_ratio = (trust_count / word_count) * 1000
+    social_ratio = (social_count / word_count) * 1000
+    promo_ratio = (promo_count / word_count) * 1000
+    benefit_ratio = (benefit_count / word_count) * 1000
+    comparison_ratio = (comparison_count / word_count) * 1000
+    recommendation_ratio = (recommendation_count / word_count) * 1000
+    ratios: Dict[str, float] = {
+        "cta_per_1000_words": cta_ratio,
+        "trust_per_1000_words": trust_ratio,
+        "social_proof_per_1000_words": social_ratio,
+        "promo_per_1000_words": promo_ratio,
+        "benefit_per_1000_words": benefit_ratio,
+        "comparison_per_1000_words": comparison_ratio,
+        "recommendation_per_1000_words": recommendation_ratio,
+        "forms": float(form_count),
+        "faq_present": 1.0 if faq_present else 0.0,
+        "search_present": 1.0 if search_present else 0.0,
+    }
+    # Define heuristics: target ranges per 1000 words
+    # CTA: 1–3 per 1000 words is optimal; below or above suggests action
+    if cta_ratio < 1:
+        suggestions.append(
+            "Ajoutez un ou plusieurs appels à l’action clairs (1–3 pour 1000 mots) pour guider les conversions."
+        )
+        score -= 5
+    elif cta_ratio > 3:
+        suggestions.append(
+            "Réduisez le nombre d’appels à l’action (1–3 pour 1000 mots) afin d’éviter une surcharge et de ne pas disperser l’attention."
+        )
+        score -= 3
+    # Trust signals: au moins 2 mots de confiance par 1000 mots
+    if trust_ratio < 2:
+        suggestions.append(
+            "Ajoutez des éléments de confiance (mots comme ‘sécurisé’, ‘licencié’, avis clients) pour rassurer les visiteurs."
+        )
+        score -= 3
+    # Forms: au moins un formulaire pour les captures de leads
+    if form_count == 0:
+        suggestions.append(
+            "Ajoutez un formulaire d’inscription ou de contact pour capter des prospects."
+        )
+        score -= 4
+    # Social proof: 1–2 mentions par 1000 mots
+    if social_ratio < 1:
+        suggestions.append(
+            "Ajoutez des preuves sociales (avis, témoignages, notes) pour augmenter la crédibilité."
+        )
+        score -= 2
+    # Promotions: 0.5–2 par 1000 mots
+    if promo_ratio < 0.5:
+        suggestions.append(
+            "Mettez en avant des promotions ou bonus pour inciter à l’action."
+        )
+        score -= 2
+    # Benefits: 1–3 par 1000 mots
+    if benefit_ratio < 1:
+        suggestions.append(
+            "Soulignez clairement les avantages et bénéfices de votre offre pour convaincre les visiteurs."
+        )
+        score -= 2
+    # Comparisons: suggérer d’inclure comparatifs si absent
+    if comparison_ratio < 0.1:
+        suggestions.append(
+            "Ajoutez des tableaux comparatifs ou des articles ‘X vs Y’ pour aider les visiteurs à choisir."
+        )
+        score -= 1
+    # Recommendations/cross‑selling: ratio < 0.5 -> suggestion
+    if recommendation_ratio < 0.5:
+        suggestions.append(
+            "Proposez des recommandations de produits ou d’articles similaires pour augmenter la valeur moyenne."
+        )
+        score -= 1
+    # FAQ and search presence
+    if not faq_present:
+        suggestions.append(
+            "Intégrez une FAQ ou section d’aide pour répondre aux questions courantes et améliorer la confiance."
+        )
+        score -= 1
+    if not search_present:
+        suggestions.append(
+            "Ajoutez une barre de recherche ou des filtres pour faciliter la navigation et la découverte de contenu."
+        )
+        score -= 1
+    # Clip score between 0 and 100
+    score = max(0, min(100, score))
+    return score, ratios, suggestions
+
+
 def _count_syllables_in_word(word: str) -> int:
     """Approximate the number of syllables in an English word.
 
@@ -1028,6 +1149,9 @@ def main() -> None:
             # Layout and visual hierarchy analysis
             layout_score, layout_ratios, layout_suggestions = layout_analysis(primary_metrics)
             primary_suggestions.extend(layout_suggestions)
+            # Business analysis suggestions
+            biz_score, biz_ratios, biz_suggestions = business_analysis(primary_metrics)
+            primary_suggestions.extend(biz_suggestions)
 
             # UI layout for primary page
             st.header("Primary Page Results")
@@ -1116,34 +1240,34 @@ def main() -> None:
             with tabs[4]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.markdown("<div class='section-title'>Growth & Business</div>", unsafe_allow_html=True)
-                # Extract business metrics
-                sp_count = int(primary_metrics.get("social_proof_count", 0))
-                pr_count = int(primary_metrics.get("promo_count", 0))
-                bn_count = int(primary_metrics.get("benefit_count", 0))
-                cp_count = int(primary_metrics.get("comparison_count", 0))
-                rc_count = int(primary_metrics.get("recommendation_count", 0))
-                faq_present = bool(primary_metrics.get("faq_present", False))
-                search_present = bool(primary_metrics.get("search_present", False))
-                # Display metrics in a grid
-                g1, g2, g3, g4 = st.columns(4)
-                g1.metric("Social proof", sp_count, "+" if sp_count > 0 else "")
-                g2.metric("Promos & bonuses", pr_count, "+" if pr_count > 0 else "")
-                g3.metric("Benefits", bn_count, "+" if bn_count > 0 else "")
-                g4.metric("Comparisons", cp_count, "+" if cp_count > 0 else "")
-                g5, g6, g7, g8 = st.columns(4)
-                g5.metric("Recommendations", rc_count, "+" if rc_count > 0 else "")
-                g6.metric("FAQ present", "Yes" if faq_present else "No", "")
-                g7.metric("Search bar", "Yes" if search_present else "No", "")
-                # Provide simple explanation
+                # Compute business score, ratios and suggestions
+                biz_score, biz_ratios, biz_suggestions = business_analysis(primary_metrics)
+                # Display key KPIs in two rows of columns
+                r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                r1c1.metric("Business Score", f"{biz_score}/100")
+                r1c2.metric("CTA per 1000 words", f"{biz_ratios['cta_per_1000_words']:.2f}", "Target 1–3")
+                r1c3.metric("Trust per 1000 words", f"{biz_ratios['trust_per_1000_words']:.2f}", "Target ≥2")
+                r1c4.metric("Forms", int(biz_ratios['forms']))
+                r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+                r2c1.metric("Social proof per 1000", f"{biz_ratios['social_proof_per_1000_words']:.2f}", "Target ≥1")
+                r2c2.metric("Promos per 1000", f"{biz_ratios['promo_per_1000_words']:.2f}", "Target ≥0.5")
+                r2c3.metric("Benefits per 1000", f"{biz_ratios['benefit_per_1000_words']:.2f}", "Target ≥1")
+                r2c4.metric("Comparisons per 1000", f"{biz_ratios['comparison_per_1000_words']:.2f}", "Target ≥0.1")
+                r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+                r3c1.metric("Recomm. per 1000", f"{biz_ratios['recommendation_per_1000_words']:.2f}", "Target ≥0.5")
+                r3c2.metric("FAQ present", "Yes" if biz_ratios['faq_present'] else "No")
+                r3c3.metric("Search bar", "Yes" if biz_ratios['search_present'] else "No")
+                # Explanation and suggestions
                 st.markdown(
-                    "Ces indicateurs évaluent la présence d’éléments orientés conversion et croissance : \n"
-                    "• Les preuves sociales (avis, témoignages) renforcent la crédibilité.\n"
-                    "• Les promotions et bonus incitent à l’action.\n"
-                    "• Les bénéfices clairement exprimés persuadent les visiteurs.\n"
-                    "• Les comparatifs et recommandations stimulent la décision et la valeur moyenne des paniers.\n"
-                    "• Une FAQ et une barre de recherche améliorent l’auto‑assistance et réduisent le taux de rebond.",
+                    "Ces indicateurs mesurent l’orientation conversion et croissance de la page. "
+                    "Des CTA et éléments de confiance bien dosés renforcent la conversion, tandis que les preuves sociales, promotions, bénéfices, comparatifs et recommandations favorisent l’engagement. "
+                    "La présence d’une FAQ et d’une barre de recherche améliore la découverte de contenu.",
                     unsafe_allow_html=True,
                 )
+                if biz_suggestions:
+                    st.markdown("<div class='section-title'>Recommandations Business</div>", unsafe_allow_html=True)
+                    html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in biz_suggestions) + "</ul>"
+                    st.markdown(html_list, unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             # Suggestions tab
             with tabs[4]:
@@ -1167,6 +1291,9 @@ def main() -> None:
                 # Layout analysis for competitor
                 competitor_layout_score, competitor_layout_ratios, competitor_layout_suggestions = layout_analysis(competitor_metrics)
                 competitor_suggestions.extend(competitor_layout_suggestions)
+                # Business analysis for competitor
+                cmp_biz_score, cmp_biz_ratios, cmp_biz_suggestions = business_analysis(competitor_metrics)
+                competitor_suggestions.extend(cmp_biz_suggestions)
                 # Content gap analysis
                 gap = content_gap(primary_metrics, competitor_metrics)
                 # Score differences
@@ -1258,32 +1385,35 @@ def main() -> None:
                 with cmp_tabs[4]:
                     st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Growth & Business</div>", unsafe_allow_html=True)
-                    sp_c = int(competitor_metrics.get("social_proof_count", 0))
-                    pr_c = int(competitor_metrics.get("promo_count", 0))
-                    bn_c = int(competitor_metrics.get("benefit_count", 0))
-                    cp_c = int(competitor_metrics.get("comparison_count", 0))
-                    rc_c = int(competitor_metrics.get("recommendation_count", 0))
-                    faq_c = bool(competitor_metrics.get("faq_present", False))
-                    search_c = bool(competitor_metrics.get("search_present", False))
-                    # Display competitor metrics with deltas
-                    d1, d2, d3, d4 = st.columns(4)
-                    d1.metric("Social proof", sp_c, delta=f"{int(primary_metrics.get('social_proof_count', 0)) - sp_c:+}")
-                    d2.metric("Promos", pr_c, delta=f"{int(primary_metrics.get('promo_count', 0)) - pr_c:+}")
-                    d3.metric("Benefits", bn_c, delta=f"{int(primary_metrics.get('benefit_count', 0)) - bn_c:+}")
-                    d4.metric("Comparisons", cp_c, delta=f"{int(primary_metrics.get('comparison_count', 0)) - cp_c:+}")
-                    d5, d6, d7, d8 = st.columns(4)
-                    d5.metric("Recommendations", rc_c, delta=f"{int(primary_metrics.get('recommendation_count', 0)) - rc_c:+}")
-                    # For FAQ and search, convert boolean to 1/0 for delta
-                    d6.metric("FAQ", "Yes" if faq_c else "No", delta="+" if (primary_metrics.get('faq_present', False) and not faq_c) else ("-" if (not primary_metrics.get('faq_present', False) and faq_c) else "0"))
-                    d7.metric("Search", "Yes" if search_c else "No", delta="+" if (primary_metrics.get('search_present', False) and not search_c) else ("-" if (not primary_metrics.get('search_present', False) and search_c) else "0"))
-                    # Explanation (same as primary)
+                    # Compute competitor business analysis
+                    cmp_biz_score, cmp_biz_ratios, cmp_biz_suggestions = business_analysis(competitor_metrics)
+                    prim_biz_score, prim_biz_ratios, _ = business_analysis(primary_metrics)
+                    # Display metrics with deltas relative to primary
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Business Score", f"{cmp_biz_score}/100", delta=f"{prim_biz_score - cmp_biz_score:+}")
+                    c2.metric("CTA/1000", f"{cmp_biz_ratios['cta_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['cta_per_1000_words'] - cmp_biz_ratios['cta_per_1000_words']:+.2f}")
+                    c3.metric("Trust/1000", f"{cmp_biz_ratios['trust_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['trust_per_1000_words'] - cmp_biz_ratios['trust_per_1000_words']:+.2f}")
+                    c4.metric("Forms", int(cmp_biz_ratios['forms']), delta=f"{int(prim_biz_ratios['forms']) - int(cmp_biz_ratios['forms']):+}")
+                    c5, c6, c7, c8 = st.columns(4)
+                    c5.metric("Social/1000", f"{cmp_biz_ratios['social_proof_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['social_proof_per_1000_words'] - cmp_biz_ratios['social_proof_per_1000_words']:+.2f}")
+                    c6.metric("Promo/1000", f"{cmp_biz_ratios['promo_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['promo_per_1000_words'] - cmp_biz_ratios['promo_per_1000_words']:+.2f}")
+                    c7.metric("Benefits/1000", f"{cmp_biz_ratios['benefit_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['benefit_per_1000_words'] - cmp_biz_ratios['benefit_per_1000_words']:+.2f}")
+                    c8.metric("Comparisons/1000", f"{cmp_biz_ratios['comparison_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['comparison_per_1000_words'] - cmp_biz_ratios['comparison_per_1000_words']:+.2f}")
+                    c9, c10, c11, c12 = st.columns(4)
+                    c9.metric("Recomm./1000", f"{cmp_biz_ratios['recommendation_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['recommendation_per_1000_words'] - cmp_biz_ratios['recommendation_per_1000_words']:+.2f}")
+                    c10.metric("FAQ", "Yes" if cmp_biz_ratios['faq_present'] else "No", delta="+" if (prim_biz_ratios['faq_present'] and not cmp_biz_ratios['faq_present']) else ("-" if (not prim_biz_ratios['faq_present'] and cmp_biz_ratios['faq_present']) else "0"))
+                    c11.metric("Search", "Yes" if cmp_biz_ratios['search_present'] else "No", delta="+" if (prim_biz_ratios['search_present'] and not cmp_biz_ratios['search_present']) else ("-" if (not prim_biz_ratios['search_present'] and cmp_biz_ratios['search_present']) else "0"))
+                    # Explanation
                     st.markdown(
-                        "Ces indicateurs comparent les éléments de croissance et conversion. Un score plus élevé indique une meilleure utilisation des témoignages, promotions, bénéfices, comparatifs, recommandations, FAQ et recherche.",
+                        "Ces indicateurs comparent la performance business et croissance entre la page primaire et la concurrente. "
+                        "Un score positif indique que la page primaire est plus optimisée, tandis qu’un score négatif signale des opportunités d’amélioration.",
                         unsafe_allow_html=True,
                     )
+                    # Append competitor business suggestions to competitor suggestions list
+                    competitor_suggestions.extend(cmp_biz_suggestions)
                     st.markdown('</div>', unsafe_allow_html=True)
                 # Competitor suggestions tab
-                with cmp_tabs[4]:
+                with cmp_tabs[5]:
                     st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Competitor Suggestions</div>", unsafe_allow_html=True)
                     if competitor_suggestions:

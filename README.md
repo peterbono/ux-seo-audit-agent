@@ -88,9 +88,14 @@ additional analyses:
   lead capture.  It also scans for social proof (testimonials,
   reviews), promotions and bonuses, explicit statements of benefits,
   comparison phrases like “vs” or “comparatif”, cross‑sell cues,
-  FAQ/help sections and a search bar.  Each metric is displayed in
-  the **Growth & Business** tab of the Streamlit interface.  The tool
-  then recommends adding or balancing these elements – such as
+  FAQ/help sections and a search bar.  To make these metrics
+  actionable, the app normalises them per 1 000 words and calculates
+  a **Business Score** out of 100 along with key performance indicators
+  (CTA/1 000 words, trust words/1 000 words, social proof/1 000 words,
+  etc.).  Ratios outside recommended ranges trigger targeted
+  suggestions.  Each KPI and the resulting Business Score are
+  displayed in the **Growth & Business** tab.  The tool then
+  recommends adding or balancing these elements – such as
   including testimonials, highlighting key benefits, offering a
   promotion, or adding a FAQ – to enhance the page’s credibility,
   usability and conversion rate.  Collectively, these extra signals
