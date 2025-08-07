@@ -1026,6 +1026,178 @@ def generate_heatmap(metrics: Dict[str, object]):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Zoning and competitor example analysis
+def zone_analysis(
+    suggestions: List[str],
+    primary_metrics: Dict[str, object],
+    competitor_metrics: Optional[Dict[str, object]] = None,
+    competitor_domain: Optional[str] = None,
+) -> Dict[str, List[str]]:
+    """Group suggestions into conceptual page zones and add competitor examples.
+
+    This helper categorises each suggestion based on its topic and relevance
+    to typical webpage sections.  For example, recommendations about
+    meta tags (title, description, canonical) are grouped under the
+    ``Meta (Head)`` zone, while call‑to‑action guidance appears in the
+    ``Hero & CTA`` zone.  The goal is to present feedback in a structured
+    way that mirrors how designers think about page layout (“above the fold”,
+    main content, footer, etc.).
+
+    When metrics for a competitor page are provided, the function also
+    generates short example notes highlighting where the competitor
+    outperforms the primary site for each zone.  For instance, if the
+    competitor has more calls‑to‑action or trust signals, an example
+    mentioning the competitor domain and metric values is added to the
+    zone.
+
+    :param suggestions: List of textual suggestions generated from
+        ``evaluate_metrics``, ``layout_analysis`` and ``business_analysis``.
+    :param primary_metrics: Metrics for the primary page.
+    :param competitor_metrics: Metrics for the competitor page, or ``None``
+        if no competitor was analysed.
+    :param competitor_domain: Domain name extracted from the competitor URL.
+    :returns: A mapping from zone names to lists of suggestions and
+        examples.  Each value is a list of strings.
+    """
+    # Define keyword patterns for zones.  Each entry maps a zone name to
+    # a list of substrings; if a suggestion contains any of these
+    # substrings (case‑insensitive), it will be grouped into that zone.
+    zones = {
+        "Meta (Head)": [
+            "<title>", "meta description", "meta robots", "canonical", "og:title",
+            "og:description", "og:image", "JSON‑LD", "structured data", "viewport"
+        ],
+        "Navigation & Header": [
+            "<nav>", "navigation", "<header>", "header", "main navigation"
+        ],
+        "Hero & CTA": [
+            "call‑to‑action", "CTA", "S’inscrire", "Obtenir", "bouton", "boutons",
+            "inscription", "guide users", "guide utilisateurs"
+        ],
+        "Main Content": [
+            "heading", "H2", "H3", "copie", "Flesch", "paragraphes", "internal linking",
+            "images", "visual", "text", "comparatifs", "contenu", "rubriques"
+        ],
+        "Trust & Social Proof": [
+            "confiance", "SSL", "licence", "badge", "avis", "témoignage", "proof"
+        ],
+        "Growth & Promotions": [
+            "promotion", "promo", "bonus", "avantage", "benefice", "comparatif", "comparaison",
+            "recommandation", "FAQ", "recherche", "search", "recommandations"
+        ],
+        "Footer & Compliance": [
+            "<footer>", "age restriction", "responsible", "responsabilité", "responsable"
+        ],
+        "Accessibility & Semantic": [
+            "ARIA", "accessibilité", "landmark", "<main>", "<footer>", "<header>", "lazy loading"
+        ],
+        "Design & UX Principles": [
+            "Gestalt", "contraste", "couleur", "Simplifiez", "feedback", "heuristique", "annuler"
+        ],
+    }
+    # Initialise result mapping with empty lists for each zone
+    grouped: Dict[str, List[str]] = {zone: [] for zone in zones}
+    # Assign each suggestion to the first matching zone; if none match,
+    # group it under "Main Content" by default as a catch‑all.
+    for suggestion in suggestions:
+        added = False
+        s_lower = suggestion.lower()
+        for zone, keywords in zones.items():
+            if any(kw.lower() in s_lower for kw in keywords):
+                grouped[zone].append(suggestion)
+                added = True
+                break
+        if not added:
+            grouped["Main Content"].append(suggestion)
+    # If competitor metrics are provided, augment zones with example notes
+    if competitor_metrics and competitor_domain:
+        # Helper to build example text
+        def add_example(zone_name: str, message: str) -> None:
+            grouped.setdefault(zone_name, []).append(message)
+
+        # CTA comparison: competitor has more CTAs
+        p_cta = int(primary_metrics.get("cta_count", 0))
+        c_cta = int(competitor_metrics.get("cta_count", 0))
+        if c_cta > p_cta and c_cta > 0:
+            add_example(
+                "Hero & CTA",
+                f"Votre concurrent {competitor_domain} affiche {c_cta} appels à l'action (CTA) contre {p_cta} sur votre page. Inspirez‑vous de sa mise en avant pour guider l'utilisateur."
+            )
+        # Trust signals comparison
+        p_trust = int(primary_metrics.get("trust_keyword_count", 0))
+        c_trust = int(competitor_metrics.get("trust_keyword_count", 0))
+        if c_trust > p_trust:
+            add_example(
+                "Trust & Social Proof",
+                f"Le site {competitor_domain} comporte davantage de signes de confiance ({c_trust} mots clés) que le vôtre ({p_trust}). Affichez licences, avis et badges pour rassurer les visiteurs."
+            )
+        # Forms comparison
+        p_forms = int(primary_metrics.get("form_count", 0))
+        c_forms = int(competitor_metrics.get("form_count", 0))
+        if c_forms > p_forms:
+            add_example(
+                "Footer & Compliance",
+                f"{competitor_domain} propose {c_forms} formulaires tandis que votre page n'en compte que {p_forms}. Un formulaire de contact ou d’inscription peut améliorer la conversion."
+            )
+        # Social proof comparison
+        p_social = int(primary_metrics.get("social_proof_count", 0))
+        c_social = int(competitor_metrics.get("social_proof_count", 0))
+        if c_social > p_social:
+            add_example(
+                "Trust & Social Proof",
+                f"{competitor_domain} met en avant des preuves sociales (témoignages, avis) que votre page ne présente pas. Ajoutez des témoignages pour renforcer votre crédibilité."
+            )
+        # Promotions comparison
+        p_promo = int(primary_metrics.get("promo_count", 0))
+        c_promo = int(competitor_metrics.get("promo_count", 0))
+        if c_promo > p_promo:
+            add_example(
+                "Growth & Promotions",
+                f"{competitor_domain} propose plus d’offres et promotions ({c_promo}) que votre site ({p_promo}). Les promotions ciblées stimulent les conversions."
+            )
+        # Benefits comparison
+        p_benefit = int(primary_metrics.get("benefit_count", 0))
+        c_benefit = int(competitor_metrics.get("benefit_count", 0))
+        if c_benefit > p_benefit:
+            add_example(
+                "Growth & Promotions",
+                f"Votre concurrent {competitor_domain} met mieux en avant les bénéfices de son offre ({c_benefit}) que vous ({p_benefit}). Clarifiez vos avantages pour persuader les visiteurs."
+            )
+        # Comparison content
+        p_comp = int(primary_metrics.get("comparison_count", 0))
+        c_comp = int(competitor_metrics.get("comparison_count", 0))
+        if c_comp > p_comp:
+            add_example(
+                "Growth & Promotions",
+                f"{competitor_domain} utilise des comparatifs (‘vs’) pour mettre en avant ses atouts. Envisagez d’ajouter des tableaux comparatifs pour aider les lecteurs à choisir."
+            )
+        # Recommendations (cross‑sell) comparison
+        p_rec = int(primary_metrics.get("recommendation_count", 0))
+        c_rec = int(competitor_metrics.get("recommendation_count", 0))
+        if c_rec > p_rec:
+            add_example(
+                "Growth & Promotions",
+                f"Le site {competitor_domain} présente des recommandations ou des contenus similaires alors que le vôtre n’en propose pas. Proposez des suggestions pour augmenter la valeur moyenne d’achat."
+            )
+        # FAQ and search comparison
+        p_faq = bool(primary_metrics.get("faq_present", False))
+        c_faq = bool(competitor_metrics.get("faq_present", False))
+        if c_faq and not p_faq:
+            add_example(
+                "Growth & Promotions",
+                f"{competitor_domain} inclut une FAQ tandis que votre page n’en dispose pas. Ajoutez une FAQ pour répondre aux questions courantes."
+            )
+        p_search = bool(primary_metrics.get("search_present", False))
+        c_search = bool(competitor_metrics.get("search_present", False))
+        if c_search and not p_search:
+            add_example(
+                "Navigation & Header",
+                f"{competitor_domain} offre un champ de recherche, ce qui facilite la navigation. Envisagez d’ajouter une barre de recherche sur votre site."
+            )
+    return grouped
+
+
 
 
 def check_gambling_compliance(url: str, metrics: Dict[str, object]) -> List[str]:
@@ -1142,6 +1314,19 @@ def main() -> None:
             # Analyse primaire
             with st.spinner("Analyzing primary page..."):
                 primary_metrics = compute_metrics(url)
+            # Préanalyse du concurrent pour le zonage et les exemples.  Nous
+            # effectuons cette analyse ici afin de disposer des métriques du
+            # concurrent lors de la préparation des suggestions zonées.  Cela
+            # peut entraîner un léger surcoût mais évite de recalculer les
+            # métriques lors de l’affichage.  Si aucun concurrent n’est
+            # fourni, ces variables restent à None.
+            pre_comp_metrics = None
+            pre_comp_domain = None
+            if competitor_url:
+                with st.spinner("Pre‑analyzing competitor for suggestions..."):
+                    pre_comp_metrics = compute_metrics(competitor_url)
+                from urllib.parse import urlparse as _urlparse_for_zone
+                pre_comp_domain = _urlparse_for_zone(competitor_url).netloc
             primary_score, primary_suggestions = evaluate_metrics(primary_metrics)
             # Domain‑specific compliance
             primary_gamble_suggestions = check_gambling_compliance(url, primary_metrics)
@@ -1269,15 +1454,20 @@ def main() -> None:
                     html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in biz_suggestions) + "</ul>"
                     st.markdown(html_list, unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-            # Suggestions tab
+            # Zoning & Suggestions tab
             with tabs[4]:
                 st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
-                st.markdown("<div class='section-title'>Suggestions</div>", unsafe_allow_html=True)
-                if primary_suggestions:
-                    # Use HTML list for better spacing
-                    html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in primary_suggestions) + "</ul>"
-                    st.markdown(html_list, unsafe_allow_html=True)
-                else:
+                st.markdown("<div class='section-title'>Zoning & Suggestions</div>", unsafe_allow_html=True)
+                # Group suggestions by zone and append competitor examples
+                zones = zone_analysis(primary_suggestions, primary_metrics, pre_comp_metrics, pre_comp_domain)
+                shown = False
+                for zone_name, items in zones.items():
+                    if items:
+                        shown = True
+                        st.subheader(zone_name)
+                        html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in items) + "</ul>"
+                        st.markdown(html_list, unsafe_allow_html=True)
+                if not shown:
                     st.write("No suggestions – well done!")
                 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1417,8 +1607,17 @@ def main() -> None:
                     st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Competitor Suggestions</div>", unsafe_allow_html=True)
                     if competitor_suggestions:
-                        html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in competitor_suggestions) + "</ul>"
-                        st.markdown(html_list, unsafe_allow_html=True)
+                        # Group competitor suggestions into zones without competitor examples
+                        cmp_zones = zone_analysis(competitor_suggestions, competitor_metrics or {}, None, None)
+                        shown_cmp = False
+                        for zone_name, items in cmp_zones.items():
+                            if items:
+                                shown_cmp = True
+                                st.subheader(zone_name)
+                                html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in items) + "</ul>"
+                                st.markdown(html_list, unsafe_allow_html=True)
+                        if not shown_cmp:
+                            st.write("No suggestions for the competitor – they are doing quite well!")
                     else:
                         st.write("No suggestions – competitor page looks strong.")
                     st.markdown('</div>', unsafe_allow_html=True)

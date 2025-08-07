@@ -101,6 +101,15 @@ additional analyses:
   usability and conversion rate.  Collectively, these extra signals
   go beyond a simple GPT prompt to provide concrete data for growth
   and conversion optimisation.
+
+  A **zoning engine** groups all recommendations into familiar page
+  zones – Meta (head), Navigation & Header, Hero & CTA, Main Content,
+  Trust & Social Proof, Growth & Promotions, Footer & Compliance,
+  Accessibility & Semantic, and Design & UX.  This helps you see
+  which part of your page needs attention.  When you analyse a
+  competitor, the tool adds example notes to the relevant zones
+  highlighting where the competitor performs better (e.g., more
+  prominent CTAs or stronger trust signals).
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -157,6 +166,17 @@ presence of a single H1, alt text ratio, internal/external link
   Open Graph tags control how links appear on social media【600788209180035†L553-L599】,
   and alt attributes help both users and search engines understand
   images【467421527218735†L89-L96】【600788209180035†L864-L869】.
+
+  Finally, all recommendations are organised into a **Zoning & Suggestions**
+  tab.  This view groups suggestions by common page regions (meta
+  head, navigation & header, hero & CTA, main content, trust & social
+  proof, growth & promotions, footer & compliance, accessibility &
+  semantic, and design & UX).  Seeing feedback in context helps you
+  prioritise improvements where they matter most.  When you provide a
+  competitor URL, the zoning tab also notes where the competitor site
+  excels – for example, highlighting that a rival page includes more
+  calls‑to‑action or stronger trust cues – so you can visualise what
+  “good” looks like.
 
 ## 📦 Installation
 
