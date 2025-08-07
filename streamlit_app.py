@@ -121,6 +121,57 @@ def compute_metrics(url: str) -> Dict[str, object]:
     metrics["external_link_count"] = external
 
     # ---------------------------------------------------------------------------
+    # Business‑oriented signals: calls‑to‑action, trust elements and forms
+    # Many affiliate and marketing sites rely on clear calls‑to‑action (CTA)
+    # buttons or links to drive conversions.  We scan all <a> and <button>
+    # elements and count how many contain common CTA verbs.  Examples include
+    # "buy", "sign up", "join", "subscribe", "download" and "learn more".
+    cta_keywords = {
+        "buy", "order", "download", "get", "join", "sign up",
+        "sign-up", "register", "subscribe", "start", "learn more",
+        "discover", "claim", "book", "try", "go"
+    }
+    cta_count = 0
+    cta_texts: List[str] = []
+    for elem in soup.find_all(["a", "button"]):
+        text_content = elem.get_text(strip=True).lower()
+        if not text_content:
+            continue
+        for kw in cta_keywords:
+            # match keyword at start or anywhere for multi‑word phrases
+            if kw in text_content:
+                cta_count += 1
+                cta_texts.append(text_content)
+                break
+    metrics["cta_count"] = cta_count
+    metrics["cta_texts"] = cta_texts
+
+    # Trust signals: look for words that imply security, licensing or social proof.
+    # We search the full page text for occurrences of these keywords.  Each
+    # unique keyword found counts once, so the count reflects the variety of
+    # trust signals rather than raw frequency.  This simple heuristic helps
+    # identify whether the page includes badges like "SSL", "licensed", or
+    # "trusted reviews".
+    trust_keywords = {
+        "ssl", "secure", "safe", "trusted", "licence", "license",
+        "licensed", "regulated", "mga", "malta gaming", "trust", "fair",
+        "état", "témoignages", "avis", "review", "testimonials"
+    }
+    found_trust = set()
+    lower_text = text.lower()
+    for kw in trust_keywords:
+        if kw in lower_text:
+            found_trust.add(kw)
+    metrics["trust_keyword_count"] = len(found_trust)
+    metrics["trust_keywords_found"] = sorted(found_trust)
+
+    # Forms detection: count the number of <form> elements.  Forms are
+    # indicative of lead capture (newsletter signup, contact, registration) and
+    # are important for affiliate marketing pages aiming to capture user
+    # information.
+    metrics["form_count"] = len(soup.find_all("form"))
+
+    # ---------------------------------------------------------------------------
     # Additional on‑page signals
     # Many subtle elements influence UX and SEO beyond the basic counts above.  We
     # capture a few of them here to differentiate the tool from a simple GPT
@@ -512,6 +563,38 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
         )
         score -= 1
 
+    # -------------------------------------------------------------------
+    # Business conversion heuristics
+    # Calls‑to‑action (CTA), trust signals and forms are critical for
+    # conversion‑focused affiliate or marketing pages.  A page with no CTA
+    # buttons or links leaves visitors unsure how to proceed, a lack of trust
+    # indicators can raise doubts, and the absence of a form limits lead
+    # capture.  Conversely, an excess of CTAs may appear overly aggressive.
+    cta_count = metrics.get("cta_count", 0)
+    if isinstance(cta_count, int):
+        if cta_count == 0:
+            suggestions.append(
+                "Add a clear call‑to‑action button or link (e.g., ‘S’inscrire’, ‘Obtenir le bonus’) to guide users towards conversion."
+            )
+            score -= 4
+        elif cta_count > 5:
+            suggestions.append(
+                "Trop de boutons ou liens d’appel à l’action peuvent sembler agressifs ; privilégiez quelques CTA bien visibles."
+            )
+            score -= 2
+    trust_count = metrics.get("trust_keyword_count", 0)
+    if isinstance(trust_count, int) and trust_count == 0:
+        suggestions.append(
+            "Incluez des signes de confiance (badges SSL, licences, avis clients) pour rassurer les visiteurs."
+        )
+        score -= 3
+    form_count = metrics.get("form_count", 0)
+    if isinstance(form_count, int) and form_count == 0:
+        suggestions.append(
+            "Ajoutez un formulaire simple d’inscription ou de contact pour capter des leads et faciliter les conversions."
+        )
+        score -= 3
+
     # End tone and content heuristics
 
     # Final clipping
@@ -813,8 +896,14 @@ def main() -> None:
 
             # UI layout for primary page
             st.header("Primary Page Results")
-            # Tabs: Summary, Structure and Visual Hierarchy, Keywords, Suggestions
-            tabs = st.tabs(["Summary", "Structure", "Keywords", "Suggestions"])
+            # Tabs: Summary, Structure and Visual Hierarchy, Keywords, Conversion, Suggestions
+            tabs = st.tabs([
+                "Summary",
+                "Structure",
+                "Keywords",
+                "Conversion",
+                "Suggestions",
+            ])
             # Summary tab: show key metrics and scores, wrapped in a card
             with tabs[0]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -867,8 +956,27 @@ def main() -> None:
                 else:
                     st.write("No significant keywords extracted.")
                 st.markdown('</div>', unsafe_allow_html=True)
-            # Suggestions tab
+            # Conversion tab
             with tabs[3]:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>Conversion & Trust</div>", unsafe_allow_html=True)
+                cc, tc, fc = st.columns(3)
+                cta_count = int(primary_metrics.get("cta_count", 0))
+                trust_count = int(primary_metrics.get("trust_keyword_count", 0))
+                form_count = int(primary_metrics.get("form_count", 0))
+                cc.metric("CTA count", cta_count, "+" if cta_count > 0 else "")
+                tc.metric("Trust signals", trust_count, "+" if trust_count > 0 else "")
+                fc.metric("Forms", form_count, "+" if form_count > 0 else "")
+                # Show details: CTA texts and trust keywords
+                if primary_metrics.get("cta_texts"):
+                    st.subheader("Calls‑to‑action trouvées")
+                    st.write(", ".join(primary_metrics.get("cta_texts", [])))
+                if primary_metrics.get("trust_keywords_found"):
+                    st.subheader("Mots‑clés de confiance trouvés")
+                    st.write(", ".join(primary_metrics.get("trust_keywords_found", [])))
+                st.markdown('</div>', unsafe_allow_html=True)
+            # Suggestions tab
+            with tabs[4]:
                 st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                 st.markdown("<div class='section-title'>Suggestions</div>", unsafe_allow_html=True)
                 if primary_suggestions:
@@ -899,6 +1007,7 @@ def main() -> None:
                     "Competitor Summary",
                     "Content Gap",
                     "Metric Differences",
+                    "Conversion",
                     "Competitor Suggestions",
                 ])
                 # Competitor summary
@@ -950,8 +1059,31 @@ def main() -> None:
                     diff["semantic_landmark_difference"] = layout_ratios.get("landmark_count", 0) - competitor_layout_ratios.get("landmark_count", 0)
                     st.json(diff)
                     st.markdown('</div>', unsafe_allow_html=True)
-                # Competitor suggestions tab
+                # Conversion tab
                 with cmp_tabs[3]:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown("<div class='section-title'>Conversion & Trust</div>", unsafe_allow_html=True)
+                    # Display competitor metrics and differences relative to primary
+                    cc1, cc2, cc3 = st.columns(3)
+                    c_cta = int(competitor_metrics.get("cta_count", 0))
+                    p_cta = int(primary_metrics.get("cta_count", 0))
+                    c_trust = int(competitor_metrics.get("trust_keyword_count", 0))
+                    p_trust = int(primary_metrics.get("trust_keyword_count", 0))
+                    c_form = int(competitor_metrics.get("form_count", 0))
+                    p_form = int(primary_metrics.get("form_count", 0))
+                    cc1.metric("CTA", c_cta, delta=f"{p_cta - c_cta:+}")
+                    cc2.metric("Trust signals", c_trust, delta=f"{p_trust - c_trust:+}")
+                    cc3.metric("Forms", c_form, delta=f"{p_form - c_form:+}")
+                    # Details
+                    if competitor_metrics.get("cta_texts"):
+                        st.subheader("CTAs trouvées")
+                        st.write(", ".join(competitor_metrics.get("cta_texts", [])))
+                    if competitor_metrics.get("trust_keywords_found"):
+                        st.subheader("Mots‑clés de confiance trouvés")
+                        st.write(", ".join(competitor_metrics.get("trust_keywords_found", [])))
+                    st.markdown('</div>', unsafe_allow_html=True)
+                # Competitor suggestions tab
+                with cmp_tabs[4]:
                     st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Competitor Suggestions</div>", unsafe_allow_html=True)
                     if competitor_suggestions:

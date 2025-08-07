@@ -62,13 +62,27 @@ additional analyses:
   search engines and assistive technologies understand page structure.
   In addition, it computes readability (Flesch reading ease), measures
   the prevalence of personal pronouns and exclamation points to infer
-  tone, extracts the top keywords on the page and builds two types of
-  heatmaps: a simple element distribution chart and an optional
-  **saliency heatmap**.  The saliency heatmap overlays a predicted
-  attention map on top of an uploaded screenshot, highlighting where a
-  viewer’s gaze may focus based on visual contrast and composition.
-  These extra signals go beyond a simple GPT prompt to provide
-  concrete data for improvement.
+  tone, extracts the top keywords on the page and performs a
+  **layout & visual hierarchy analysis**.  This analysis derives a
+  "Layout Score" based on ratios of headings, images and links
+  relative to the amount of text, and checks for semantic landmarks
+  (`<nav>`, `<header>`, `<main>`, `<footer>`).  A balanced ratio of
+  structural elements indicates that the page is neither overly
+  cluttered nor too sparse.  The layout score and accompanying
+  suggestions help you understand how to organise content for better
+  legibility and user flow.
+
+  Beyond structural and technical metrics, the analyser also
+  **captures business conversion signals**.  It counts how many
+  calls‑to‑action (CTA) buttons or links appear on the page,
+  detects the presence of trust‑building keywords (e.g. “SSL”,
+  “licence”, “avis clients”) and records the number of forms used for
+  lead capture.  These statistics are compared against best‑practice
+  ranges.  The tool then recommends adding a prominent CTA if none
+  exists, limiting overly aggressive CTAs, including badges or
+  testimonials to reassure visitors, and inserting simple sign‑up
+  forms.  Collectively, these extra signals go beyond a simple GPT
+  prompt to provide concrete data for conversion optimisation.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -98,22 +112,29 @@ web interface.  This app offers an instant audit by analysing the
 page’s HTML directly (no Lighthouse needed).  It computes a UX/SEO
 score based on heuristics like title length, meta description length,
 presence of a single H1, alt text ratio, internal/external link
- balance, readability, and the extra signals mentioned above (canonical
- tag, robots meta, Open Graph tags, JSON‑LD structured data, viewport
- meta, ARIA usage, lazy loading).  It also measures the prevalence of
- personal pronouns and exclamation points to infer tone, extracts the top
- keywords on the page and compares them against a competitor to highlight
- content gaps, and generates both a simple heatmap of element counts and
- an optional saliency heatmap if you upload a screenshot.  The saliency
- map estimates where a user’s gaze may focus based solely on layout and
- contrast, giving a quick hint of visual hierarchy.  For
- gambling or betting sites, the app checks for responsible gaming notices
- and age restrictions.  The tool then generates a set of actionable
- suggestions to improve the page.  These heuristics draw on
-industry guidance: canonical tags tell search engines which version of a
-page to index【600788209180035†L501-L540】, Open Graph tags control how
-links appear on social media【600788209180035†L553-L599】, and alt
-attributes help both users and search engines understand images【467421527218735†L89-L96】【600788209180035†L864-L869】.
+  balance, readability, and the extra signals mentioned above (canonical
+  tag, robots meta, Open Graph tags, JSON‑LD structured data, viewport
+  meta, ARIA usage, lazy loading).  It also measures the prevalence of
+  personal pronouns and exclamation points to infer tone.  The tool
+  extracts the top keywords on the page and compares them against a
+  competitor to highlight content gaps.  It calculates a **Layout Score**
+  along with a summary of how many headings, images and links appear per
+  thousand words and counts how many semantic landmarks (nav, header,
+  main, footer) are present to assess structural completeness.
+
+  To serve marketers and affiliate sites, the Streamlit app also
+  reports the number of calls‑to‑action, trust keywords (e.g. “secure”,
+  “licence”, “avis clients”) and forms found on the page.  These
+  statistics are displayed in a dedicated **Conversion** tab, where
+  you can see CTA texts and trust keywords detected and how your
+  numbers compare to a competitor.  For gambling or betting sites,
+  the app checks for responsible gaming notices and age restrictions.
+  The tool then generates a set of actionable suggestions to improve the
+  page.  These heuristics draw on industry guidance: canonical tags
+  tell search engines which version of a page to index【600788209180035†L501-L540】,
+  Open Graph tags control how links appear on social media【600788209180035†L553-L599】,
+  and alt attributes help both users and search engines understand
+  images【467421527218735†L89-L96】【600788209180035†L864-L869】.
 
 ## 📦 Installation
 
@@ -188,7 +209,8 @@ using your own CSS or frameworks.
 components.  It accepts command‑line arguments, invokes the page
 crawler and Lighthouse, calculates comparison metrics, and optionally
 calls OpenAI.  You are encouraged to extend the code with additional
-analyses such as keyword density, readability or heatmap predictions.
+analyses such as keyword density, more nuanced readability or
+visual‑hierarchy predictions.
 
 ### requirements.txt
 
@@ -198,8 +220,12 @@ minimum it includes:
 * `requests` for downloading HTML
 * `beautifulsoup4` for parsing HTML
 * `tqdm` for progress bars
-* `matplotlib` and `numpy` for generating simple heatmaps and working with
-  numerical arrays
+
+# The following dependencies are optional and only required if you enable
+# advanced visualisations (e.g. saliency heatmaps) in future:
+# * `matplotlib` and `numpy` for generating charts and working with
+#   numerical arrays
+# * `opencv-python-headless` and `Pillow` for image processing
 
 If you enable the OpenAI step you will also need `openai`.  The
 dependency list is intentionally small; additional libraries can be
