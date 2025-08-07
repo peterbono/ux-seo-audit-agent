@@ -157,8 +157,13 @@ def compute_metrics(url: str) -> Dict[str, object]:
         "licensed", "regulated", "mga", "malta gaming", "trust", "fair",
         "état", "témoignages", "avis", "review", "testimonials"
     }
+    # Extract the full page text once for trust signal detection.  We defer storing
+    # this as metrics["plain_text"] until later, but reusing it here avoids
+    # referencing an undefined variable.  Without this, referencing ``text``
+    # before it is assigned causes a runtime error (see issue reported by users).
+    full_page_text = soup.get_text(separator=" ", strip=True)
+    lower_text = full_page_text.lower()
     found_trust = set()
-    lower_text = text.lower()
     for kw in trust_keywords:
         if kw in lower_text:
             found_trust.add(kw)
