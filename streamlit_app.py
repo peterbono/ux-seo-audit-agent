@@ -1309,15 +1309,11 @@ def main() -> None:
         <style>
         /* Base styles: use a clean sans‑serif font and light background */
         html, body, .main, .stApp {background-color: #f9fafb; color: #111827; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
-        /* Card container with rounded corners and subtle shadow */
-        .card {
-            background-color: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-top: 1rem;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        }
+        /* Card container styling removed.  Streamlit uses a `.card` class
+           internally for certain components.  Our earlier custom styling
+           inadvertently styled those internal elements and left empty boxes
+           visible.  By omitting custom `.card` rules we avoid injecting
+           blank cards into the layout. */
         /* Section header styling */
         .section-title {
             font-size: 1.3rem;
@@ -1471,8 +1467,18 @@ def main() -> None:
                     lr_col1, lr_col2 = st.columns(2)
                     lr_col1.metric("Unique words", uniq_count)
                     lr_col2.metric("Lexical richness", f"{lex_rich:.2f}")
+                    # Additional linguistic details: pronoun ratio and exclamation count help
+                    # illustrate tone and style beyond lexical diversity.  A high
+                    # pronoun ratio can signal conversational or salesy copy,
+                    # while exclamation points indicate emphasis or urgency.
+                    pr_ratio = primary_metrics.get("pronoun_ratio", 0.0)
+                    ex_count = primary_metrics.get("exclamation_count", 0)
+                    pr_col1, pr_col2 = st.columns(2)
+                    pr_col1.metric("Pronoun ratio", f"{pr_ratio:.2f}")
+                    pr_col2.metric("Exclamation count", ex_count)
                     st.caption(
-                        "Le rapport de richesse lexicale est calculé comme le nombre de mots uniques divisés par le nombre total de mots (après nettoyage)."
+                        "La richesse lexicale est le rapport entre les mots uniques et le nombre total de mots. "
+                        "Le ratio de pronoms représente la proportion de mots référant au lecteur ou à l’entreprise (vous/nous) et les points d’exclamation indiquent l’emphase."
                     )
                 else:
                     st.write("Aucun mot significatif n'a été extrait.")
@@ -1484,13 +1490,19 @@ def main() -> None:
                 # expander allows users to view the actual CTA and trust texts if
                 # desired.
                 st.markdown("<div class='section-title'>Conversion & Trust</div>", unsafe_allow_html=True)
+                # Show simple numeric values instead of using st.metric, which
+                # automatically displays an arrow with a "+" by default.  We
+                # present the counts as plain text to avoid confusion.
                 cc, tc, fc = st.columns(3)
                 cta_count = int(primary_metrics.get("cta_count", 0))
                 trust_count = int(primary_metrics.get("trust_keyword_count", 0))
                 form_count = int(primary_metrics.get("form_count", 0))
-                cc.metric("CTA count", cta_count)
-                tc.metric("Trust signals", trust_count)
-                fc.metric("Forms", form_count)
+                cc.subheader("CTA count")
+                cc.write(cta_count)
+                tc.subheader("Trust signals")
+                tc.write(trust_count)
+                fc.subheader("Forms")
+                fc.write(form_count)
                 # Show details: CTA texts and trust keywords in an optional expander
                 if primary_metrics.get("cta_texts") or primary_metrics.get("trust_keywords_found"):
                     with st.expander("Voir les textes des CTA et signaux de confiance", expanded=False):
@@ -1684,6 +1696,10 @@ def main() -> None:
                     # compares to the competitor.
                     st.markdown("<div class='section-title'>Conversion & Trust</div>", unsafe_allow_html=True)
                     # Display competitor metrics and differences relative to primary
+                    # Show competitor counts alongside the difference without using
+                    # st.metric to avoid arrow icons.  Each value is presented
+                    # with the difference relative to the primary page in
+                    # parentheses (positive means your page has more).
                     cc1, cc2, cc3 = st.columns(3)
                     c_cta = int(competitor_metrics.get("cta_count", 0))
                     p_cta = int(primary_metrics.get("cta_count", 0))
@@ -1691,9 +1707,12 @@ def main() -> None:
                     p_trust = int(primary_metrics.get("trust_keyword_count", 0))
                     c_form = int(competitor_metrics.get("form_count", 0))
                     p_form = int(primary_metrics.get("form_count", 0))
-                    cc1.metric("CTA", c_cta, delta=f"{p_cta - c_cta:+}")
-                    cc2.metric("Trust signals", c_trust, delta=f"{p_trust - c_trust:+}")
-                    cc3.metric("Forms", c_form, delta=f"{p_form - c_form:+}")
+                    cc1.subheader("CTA")
+                    cc1.write(f"{c_cta} ({p_cta - c_cta:+})")
+                    cc2.subheader("Trust signals")
+                    cc2.write(f"{c_trust} ({p_trust - c_trust:+})")
+                    cc3.subheader("Forms")
+                    cc3.write(f"{c_form} ({p_form - c_form:+})")
                     # Details hidden behind an expander for clarity
                     if competitor_metrics.get("cta_texts") or competitor_metrics.get("trust_keywords_found"):
                         with st.expander("Voir les CTA et signaux de confiance du concurrent", expanded=False):
