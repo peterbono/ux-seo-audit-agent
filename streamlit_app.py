@@ -381,6 +381,19 @@ def compute_metrics(url: str) -> Dict[str, object]:
         metrics["pronoun_ratio"] > 0.05 or metrics["exclamation_count"] > 2
     ) else "formal"
 
+    # Lexical richness metrics.  We count the number of unique words in the
+    # cleaned word list (after removing stopwords and normalising) and
+    # compute the ratio of unique words to total cleaned words.  This
+    # gives a sense of vocabulary diversity: higher values indicate more varied
+    # language, while lower values suggest repetition or keyword stuffing.
+    unique_words = set(cleaned_words)
+    metrics["unique_word_count"] = len(unique_words)
+    metrics["lexical_richness"] = (
+        len(unique_words) / len(cleaned_words)
+        if cleaned_words
+        else 0.0
+    )
+
     return metrics
 
 
@@ -1409,10 +1422,10 @@ def main() -> None:
                 hr_perk = heading_ratio * 1000
                 ir_perk = image_ratio * 1000
                 lr_perk = link_ratio * 1000
-                lc1.metric("Headings per 1000 words", f"{hr_perk:.2f}", "Target ~3")
-                lc2.metric("Images per 1000 words", f"{ir_perk:.2f}", "Target ~2")
-                lc3.metric("Links per 1000 words", f"{lr_perk:.2f}", "Target ~10")
-                lc4.metric("Semantic Landmarks", f"{int(landmark_count)}/4")
+                lc1.metric("Headings per 1000 words", f"{hr_perk:.2f}")
+                lc2.metric("Images per 1000 words", f"{ir_perk:.2f}")
+                lc3.metric("Links per 1000 words", f"{lr_perk:.2f}")
+                lc4.metric("Balises sémantiques", f"{int(landmark_count)}/4")
                 # Provide explanation and tips without progress bars.
                 # Clear guidance in bullet form helps users understand what the target values mean
                 # without reading a dense paragraph.  We removed the progress bars to simplify
@@ -1449,6 +1462,18 @@ def main() -> None:
                         big_col.table(bigrams)
                     else:
                         big_col.write("Pas de phrases pertinentes trouvées.")
+                    # After listing keywords and phrases, show lexical diversity metrics.  A higher
+                    # lexical richness indicates a wider vocabulary and may signal richer
+                    # content, while a very low ratio could mean repetition or keyword stuffing.
+                    lex_rich = primary_metrics.get("lexical_richness", 0.0)
+                    uniq_count = primary_metrics.get("unique_word_count", 0)
+                    # Display metrics for unique word count and lexical richness in a new row
+                    lr_col1, lr_col2 = st.columns(2)
+                    lr_col1.metric("Unique words", uniq_count)
+                    lr_col2.metric("Lexical richness", f"{lex_rich:.2f}")
+                    st.caption(
+                        "Le rapport de richesse lexicale est calculé comme le nombre de mots uniques divisés par le nombre total de mots (après nettoyage)."
+                    )
                 else:
                     st.write("Aucun mot significatif n'a été extrait.")
             # Conversion tab
@@ -1487,18 +1512,18 @@ def main() -> None:
                 # Display key KPIs in two rows of columns
                 r1c1, r1c2, r1c3, r1c4 = st.columns(4)
                 r1c1.metric("Business Score", f"{biz_score}/100")
-                r1c2.metric("CTA per 1000 words", f"{biz_ratios['cta_per_1000_words']:.2f}", "Target 1–3")
-                r1c3.metric("Trust per 1000 words", f"{biz_ratios['trust_per_1000_words']:.2f}", "Target ≥2")
+                r1c2.metric("CTA par 1000 mots", f"{biz_ratios['cta_per_1000_words']:.2f}")
+                r1c3.metric("Confiance par 1000 mots", f"{biz_ratios['trust_per_1000_words']:.2f}")
                 r1c4.metric("Forms", int(biz_ratios['forms']))
                 r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-                r2c1.metric("Social proof per 1000", f"{biz_ratios['social_proof_per_1000_words']:.2f}", "Target ≥1")
-                r2c2.metric("Promos per 1000", f"{biz_ratios['promo_per_1000_words']:.2f}", "Target ≥0.5")
-                r2c3.metric("Benefits per 1000", f"{biz_ratios['benefit_per_1000_words']:.2f}", "Target ≥1")
-                r2c4.metric("Comparisons per 1000", f"{biz_ratios['comparison_per_1000_words']:.2f}", "Target ≥0.1")
+                r2c1.metric("Social par 1000", f"{biz_ratios['social_proof_per_1000_words']:.2f}")
+                r2c2.metric("Promos par 1000", f"{biz_ratios['promo_per_1000_words']:.2f}")
+                r2c3.metric("Bénéfices par 1000", f"{biz_ratios['benefit_per_1000_words']:.2f}")
+                r2c4.metric("Comparaisons par 1000", f"{biz_ratios['comparison_per_1000_words']:.2f}")
                 r3c1, r3c2, r3c3, r3c4 = st.columns(4)
-                r3c1.metric("Recomm. per 1000", f"{biz_ratios['recommendation_per_1000_words']:.2f}", "Target ≥0.5")
-                r3c2.metric("FAQ present", "Yes" if biz_ratios['faq_present'] else "No")
-                r3c3.metric("Search bar", "Yes" if biz_ratios['search_present'] else "No")
+                r3c1.metric("Recommandations/1000", f"{biz_ratios['recommendation_per_1000_words']:.2f}")
+                r3c2.metric("FAQ", "Oui" if biz_ratios['faq_present'] else "Non")
+                r3c3.metric("Barre de recherche", "Oui" if biz_ratios['search_present'] else "Non")
                 # Explanation and suggestions without progress bars
                 st.markdown(
                     """
@@ -1517,10 +1542,8 @@ def main() -> None:
                     st.markdown("<div class='section-title'>Recommandations Business</div>", unsafe_allow_html=True)
                     html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in biz_suggestions) + "</ul>"
                     st.markdown(html_list, unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
             # Zoning & Suggestions tab
             with tabs[5]:
-                st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                 st.markdown("<div class='section-title'>Zoning & Suggestions</div>", unsafe_allow_html=True)
                 # Group suggestions by zone and append competitor examples
                 zones = zone_analysis(primary_suggestions, primary_metrics, pre_comp_metrics, pre_comp_domain)
@@ -1533,7 +1556,6 @@ def main() -> None:
                             st.markdown(html_list, unsafe_allow_html=True)
                 if not shown:
                     st.write("No suggestions – well done!")
-                st.markdown('</div>', unsafe_allow_html=True)
 
             # If competitor provided
             if competitor_url:
@@ -1615,10 +1637,14 @@ def main() -> None:
                         st.pyplot(fig)
                     except Exception:
                         st.info("Score comparison chart unavailable (Matplotlib not installed).")
-                    # Optionally expose the full competitor metrics in a collapsed section
-                    if competitor_metrics:
-                        with st.expander("Afficher tous les métriques du concurrent", expanded=False):
-                            st.json(competitor_metrics)
+                    # Optionally expose the full competitor metrics in a collapsed section.
+                    # We intentionally do not display all raw competitor metrics in the
+                    # UI to keep the interface focused on actionable insights.  If
+                    # needed for debugging, the metrics can be logged or inspected
+                    # separately.  The following block has been disabled:
+                    # if competitor_metrics:
+                    #     with st.expander("Afficher tous les métriques du concurrent", expanded=False):
+                    #         st.json(competitor_metrics)
                 # Content gap analysis tab
                 with cmp_tabs[1]:
                     # Content gap analysis tab: display missing keywords and H2 headings without custom card wrappers

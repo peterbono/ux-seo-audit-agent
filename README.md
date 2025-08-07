@@ -123,7 +123,10 @@ additional analyses:
     collapsible sections or can be omitted entirely, keeping the main view
     focused on actionable insights.  The **Keywords** tab now shows both
     the most frequent single‑word keywords and the most common
-    two‑word phrases to reveal deeper patterns in your content.
+    two‑word phrases to reveal deeper patterns in your content.  It also
+    reports **lexical richness** (the proportion of unique words to the total
+    vocabulary) and the total count of unique words, giving you a quick
+    indication of how varied or repetitive your language is.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -157,8 +160,10 @@ presence of a single H1, alt text ratio, internal/external link
   tag, robots meta, Open Graph tags, JSON‑LD structured data, viewport
   meta, ARIA usage, lazy loading).  It also measures the prevalence of
   personal pronouns and exclamation points to infer tone.  The tool
-  extracts the top keywords and the most common two‑word phrases on the page and compares them against a
-  competitor to highlight content gaps.  It calculates a **Layout Score**
+  extracts the top keywords and the most common two‑word phrases on the page.  It also
+  measures lexical richness (unique words divided by total words) so you
+  can gauge how varied your copy is.  These keywords and phrases are compared
+  against a competitor to highlight content gaps.  The app calculates a **Layout Score**
   along with a summary of how many headings, images and links appear per
   thousand words and counts how many semantic landmarks (nav, header,
   main, footer) are present to assess structural completeness.
