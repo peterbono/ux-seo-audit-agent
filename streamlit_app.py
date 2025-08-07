@@ -600,6 +600,25 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
         )
         score -= 3
 
+    # -------------------------------------------------------------------
+    # High‑level UX and design heuristics (Gestalt and Nielsen)
+    # These recommendations are independent of specific metric thresholds
+    # and serve as general guidance for business‑oriented optimisation.
+    # Gestalt principles emphasise grouping, contrast and alignment, while
+    # Nielsen’s heuristics encourage simplicity, feedback and consistency.
+    suggestions.append(
+        "Utilisez des lois de Gestalt pour améliorer la hiérarchie visuelle : regroupez les éléments liés par proximité et similaires par couleur ou forme, et veillez à des espacements cohérents."
+    )
+    suggestions.append(
+        "Mettez en avant vos appels à l’action avec des contrastes de couleurs et un alignement clair afin qu’ils ressortent immédiatement."
+    )
+    suggestions.append(
+        "Simplifiez l’interface et adoptez des modèles de navigation familiers pour réduire la charge cognitive (heuristique de Nielsen : cohérence et normes)."
+    )
+    suggestions.append(
+        "Donnez un feedback explicite aux actions des utilisateurs (messages de confirmation, changements visuels) et offrez la possibilité d’annuler facilement (heuristiques de visibilité de l’état du système et de contrôle par l’utilisateur)."
+    )
+
     # End tone and content heuristics
 
     # Final clipping
