@@ -36,7 +36,8 @@ try:
 except ImportError:
     st = None  # type: ignore
 from urllib.parse import urlparse
-from io import BytesIO  # for reading uploaded images
+# We no longer accept uploaded screenshots for saliency analysis, so
+# BytesIO is no longer needed.  Removing this import avoids confusion.
 
 
 def compute_metrics(url: str) -> Dict[str, object]:
@@ -548,123 +549,144 @@ def content_gap(primary: Dict[str, object], competitor: Dict[str, object]) -> Di
     }
 
 
+def layout_analysis(metrics: Dict[str, object]) -> Tuple[int, Dict[str, float], List[str]]:
+    """Assess the structural layout and visual hierarchy of a page.
+
+    Unlike a saliency heatmap that requires a screenshot, this function
+    computes a synthetic "Layout Score" based on ratios of headings,
+    images and links relative to the overall word count and the presence
+    of semantic landmarks (nav, header, main, footer).  The aim is to
+    approximate whether the content is well structured and visually
+    balanced.  A higher score (closer to 100) indicates a healthy mix
+    of structural elements, while very low or very high ratios suggest
+    cluttered or sparse layouts.
+
+    The returned ratios dictionary contains the actual ratios used for
+    scoring, which can be displayed in the UI.  Suggestions provide
+    guidance on improving the page layout.
+
+    :param metrics: A metrics dictionary from ``compute_metrics``.
+    :returns: ``(score, ratios, suggestions)`` where ``score`` is an
+              integer between 0 and 100, ``ratios`` maps descriptive keys
+              ("heading_ratio", "image_ratio", "link_ratio", "landmark_count")
+              to numeric values, and ``suggestions`` is a list of
+              human‑readable recommendations.
+    """
+    # Extract counts
+    word_count = max(1, int(metrics.get("word_count", 0)))
+    total_headings = int(metrics.get("h1_count", 0)) + int(metrics.get("h2_count", 0)) + int(metrics.get("h3_count", 0))
+    image_count = int(metrics.get("image_count", 0))
+    link_count = int(metrics.get("link_count", 0))
+    # Compute ratios relative to words
+    heading_ratio = total_headings / word_count  # headings per word
+    image_ratio = image_count / word_count       # images per word
+    link_ratio = link_count / word_count         # links per word
+    # Count semantic landmarks present
+    landmark_count = sum(
+        1 for key in ["nav_present", "header_present", "main_present", "footer_present"]
+        if metrics.get(key)
+    )
+    # Ratios dictionary for display
+    ratios = {
+        "heading_ratio": heading_ratio,
+        "image_ratio": image_ratio,
+        "link_ratio": link_ratio,
+        "landmark_count": landmark_count,
+    }
+    # Scoring heuristics: assign up to 25 points for each category
+    def subscore(actual: float, target: float, weight: float) -> float:
+        """Compute a subscore based on proximity of actual ratio to target.
+
+        If the ratio is within a factor of 0.5–2 of the target, full weight
+        is awarded.  If it is moderately off (0.2–5×), 70 % of the weight
+        is awarded.  Otherwise only 40 % of the weight is given.  This
+        simple scheme penalises extremely high or low ratios without
+        over‑penalising reasonable variation.
+        """
+        if actual == 0 or target == 0:
+            return weight * 0.4
+        ratio = actual / target
+        if 0.5 <= ratio <= 2.0:
+            return weight
+        elif 0.2 <= ratio <= 5.0:
+            return weight * 0.7
+        else:
+            return weight * 0.4
+    # Define target ratios: these are empirical values representing a
+    # healthy distribution for typical web pages.
+    target_heading_ratio = 1 / 300  # roughly one heading for every 300 words
+    target_image_ratio = 1 / 500   # roughly one image for every 500 words
+    target_link_ratio = 1 / 100    # roughly one link for every 100 words
+    score = 0
+    score += subscore(heading_ratio, target_heading_ratio, 25)
+    score += subscore(image_ratio, target_image_ratio, 25)
+    score += subscore(link_ratio, target_link_ratio, 25)
+    # Landmarks contribute linearly: each present landmark gives 6.25 points
+    score += (landmark_count / 4) * 25
+    # Clip score and convert to int
+    layout_score = int(min(max(score, 0), 100))
+    # Suggestions
+    suggestions: List[str] = []
+    # Headings suggestions
+    if heading_ratio < target_heading_ratio * 0.5:
+        suggestions.append(
+            "Add more headings (H1–H3) to break up long stretches of text and improve hierarchy."
+        )
+    elif heading_ratio > target_heading_ratio * 2:
+        suggestions.append(
+            "Reduce the number of headings or group sections more logically to avoid clutter."
+        )
+    # Images suggestions
+    if image_ratio < target_image_ratio * 0.5 and image_count > 0:
+        suggestions.append(
+            "Consider adding more images or illustrations to enrich the content visually."
+        )
+    elif image_ratio > target_image_ratio * 2:
+        suggestions.append(
+            "Too many images relative to text can distract readers; remove or combine images where appropriate."
+        )
+    # Links suggestions
+    if link_ratio < target_link_ratio * 0.5 and link_count > 0:
+        suggestions.append(
+            "Increase internal linking to guide users and search engines through your content."
+        )
+    elif link_ratio > target_link_ratio * 2:
+        suggestions.append(
+            "Reduce the number of links or ensure they serve clear navigation and are not overwhelming."
+        )
+    # Semantic landmarks suggestions
+    if landmark_count < 4:
+        missing = []
+        for key, label in [
+            ("nav_present", "<nav>"),
+            ("header_present", "<header>"),
+            ("main_present", "<main>"),
+            ("footer_present", "<footer>")
+        ]:
+            if not metrics.get(key):
+                missing.append(label)
+        suggestions.append(
+            f"Add semantic landmarks {', '.join(missing)} to improve structure and accessibility."
+        )
+    return layout_score, ratios, suggestions
+
+
 def generate_heatmap(metrics: Dict[str, object]):
-    """Create a heatmap representing the relative distribution of key page elements.
+    """Deprecated: previously created a heatmap of element counts.
 
-    This helper visualises how many headings (H1–H3), images, links and words
-    appear on a page by displaying a one‑row heatmap.  It is intended as a
-    lightweight alternative to true user‑behaviour heatmaps and requires only
-    ``matplotlib`` and ``numpy``.  If these libraries are missing, the
-    function returns ``None`` so the caller can degrade gracefully.
+    This function is retained for backwards compatibility but now simply
+    returns ``None``.  Earlier versions of the app displayed a heatmap of
+    headings, images, links and word counts.  Feedback indicated that this
+    chart did not provide meaningful insights, so it has been removed from
+    the interface.  The import and plotting code remain commented out to
+    avoid requiring Matplotlib and NumPy on lightweight deployments.
 
-    :param metrics: Metrics dictionary for a page.
-    :returns: A matplotlib figure ready for rendering, or ``None`` if the
-              plotting libraries are unavailable.
+    :param metrics: Unused.
+    :returns: ``None`` always.
     """
-    try:
-        import matplotlib.pyplot as plt  # type: ignore
-        import numpy as np  # type: ignore
-    except ImportError:
-        return None
-    labels = ["H1", "H2", "H3", "Images", "Links", "Words"]
-    values = [
-        metrics.get("h1_count", 0),
-        metrics.get("h2_count", 0),
-        metrics.get("h3_count", 0),
-        metrics.get("image_count", 0),
-        metrics.get("link_count", 0),
-        metrics.get("word_count", 0),
-    ]
-    data = np.array([values])
-    fig, ax = plt.subplots(figsize=(len(labels) * 0.8, 2))
-    im = ax.imshow(data, aspect="auto")
-    ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_yticks([])
-    ax.set_title("Distribution of page elements")
-    for i, val in enumerate(values):
-        ax.text(i, 0, f"{val}", va="center", ha="center", fontsize=9)
-    return fig
+    return None
 
 
-def _spectral_residual_saliency(img) -> "np.ndarray":
-    """Compute a saliency map using the spectral residual algorithm.
-
-    This algorithm approximates visual attention by analysing the log spectrum of
-    the image's Fourier transform.  It is a lightweight technique that does not
-    require training data and can run on serverless platforms.  The returned
-    saliency map is normalised to the range [0, 1].
-
-    :param img: A BGR image as a NumPy array.
-    :returns: A 2‑D NumPy array representing the saliency map.
-    """
-    import cv2  # type: ignore
-    import numpy as np  # type: ignore
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = np.float32(gray)
-    # Compute the 2D FFT and separate magnitude and phase
-    dft = cv2.dft(gray, flags=cv2.DFT_COMPLEX_OUTPUT)
-    real, imag = dft[:, :, 0], dft[:, :, 1]
-    mag, phase = cv2.cartToPolar(real, imag)
-    # Log amplitude spectrum
-    log_mag = np.log(mag + 1e-8)
-    # Average filter (spectral residual)
-    avg_log_mag = cv2.boxFilter(log_mag, -1, (3, 3))
-    spectral_residual = log_mag - avg_log_mag
-    # Convert back to complex form
-    exp_residual = np.exp(spectral_residual)
-    real2, imag2 = cv2.polarToCart(exp_residual, phase)
-    complex_spectrum = cv2.merge([real2, imag2])
-    # Inverse FFT
-    inverse = cv2.idft(complex_spectrum, flags=cv2.DFT_SCALE | cv2.DFT_REAL_OUTPUT)
-    saliency_map = inverse ** 2
-    saliency_map = cv2.GaussianBlur(saliency_map, (9, 9), sigmaX=0)
-    cv2.normalize(saliency_map, saliency_map, 0, 1, cv2.NORM_MINMAX)
-    return saliency_map
-
-
-def generate_saliency_heatmap(image_bytes: bytes):
-    """Generate a saliency heatmap from an uploaded image.
-
-    The function accepts raw image bytes (PNG or JPEG) and computes a
-    visual saliency map using the spectral residual algorithm.  It returns
-    a matplotlib figure displaying the heatmap.  If the required
-    libraries (Pillow, OpenCV, NumPy, Matplotlib) are unavailable, ``None``
-    is returned.
-
-    :param image_bytes: Raw bytes of the uploaded image file.
-    :returns: A matplotlib figure or ``None`` if dependencies are missing.
-    """
-    try:
-        from PIL import Image  # type: ignore
-        import cv2  # type: ignore
-        import numpy as np  # type: ignore
-        import matplotlib.pyplot as plt  # type: ignore
-    except ImportError:
-        return None
-    # Read image from bytes
-    try:
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    except Exception:
-        return None
-    img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    saliency_map = _spectral_residual_saliency(img_bgr)
-    # Display original and saliency overlay side by side.  Normalise saliency for overlay.
-    saliency_norm = saliency_map
-    # Create two subplots: original screenshot and saliency overlay on top of original
-    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-    # Original image
-    axes[0].imshow(img)
-    axes[0].axis("off")
-    axes[0].set_title("Capture originale")
-    # Overlay: show the original image with saliency map overlay as a heatmap
-    axes[1].imshow(img)
-    axes[1].imshow(saliency_norm, cmap="hot", alpha=0.6)
-    axes[1].axis("off")
-    axes[1].set_title("Carte de saillance")
-    fig.suptitle("Analyse prédite de l'attention visuelle", fontsize=10)
-    return fig
 
 
 def check_gambling_compliance(url: str, metrics: Dict[str, object]) -> List[str]:
@@ -785,52 +807,55 @@ def main() -> None:
             # Domain‑specific compliance
             primary_gamble_suggestions = check_gambling_compliance(url, primary_metrics)
             primary_suggestions.extend(primary_gamble_suggestions)
+            # Layout and visual hierarchy analysis
+            layout_score, layout_ratios, layout_suggestions = layout_analysis(primary_metrics)
+            primary_suggestions.extend(layout_suggestions)
 
             # UI layout for primary page
             st.header("Primary Page Results")
-            tabs = st.tabs(["Summary", "Heatmap", "Keywords", "Suggestions"])
-            # Summary tab: show key metrics and score, wrapped in a card
+            # Tabs: Summary, Structure and Visual Hierarchy, Keywords, Suggestions
+            tabs = st.tabs(["Summary", "Structure", "Keywords", "Suggestions"])
+            # Summary tab: show key metrics and scores, wrapped in a card
             with tabs[0]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 # Use columns to display metrics in rows of three
                 col1, col2, col3 = st.columns(3)
                 col1.metric("UX/SEO Score", f"{primary_score}/100")
-                col2.metric("Word Count", int(primary_metrics.get("word_count", 0)))
-                col3.metric("Flesch Reading Ease", float(primary_metrics.get("flesch_reading_ease", 0)))
-                col1.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
-                col2.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
+                col2.metric("Layout Score", f"{layout_score}/100")
                 col3.metric("Tone", str(primary_metrics.get("tone", "unknown")).capitalize())
+                col1.metric("Words", int(primary_metrics.get("word_count", 0)))
+                col2.metric("Flesch Reading Ease", float(primary_metrics.get("flesch_reading_ease", 0)))
+                col3.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
+                col1.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
+                col2.metric("Internal Links", int(primary_metrics.get("internal_link_count", 0)))
+                col3.metric("External Links", int(primary_metrics.get("external_link_count", 0)))
                 st.markdown("<div class='section-title'>Detailed Metrics</div>", unsafe_allow_html=True)
                 st.json(primary_metrics)
                 st.markdown('</div>', unsafe_allow_html=True)
-            # Heatmap tab
+            # Structure tab
             with tabs[1]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                # Element distribution heatmap
-                st.markdown("<div class='section-title'>Element Distribution</div>", unsafe_allow_html=True)
-                fig_dist = generate_heatmap(primary_metrics)
-                if fig_dist is not None:
-                    st.pyplot(fig_dist)
-                else:
-                    st.info(
-                        "Matplotlib (or NumPy) is not installed in this environment. "
-                        "Distribution heatmap generation is disabled."
-                    )
-                # Visual saliency heatmap (requires uploaded screenshot)
-                st.markdown("<div class='section-title'>Visual Saliency (optional)</div>", unsafe_allow_html=True)
-                uploaded_primary = st.file_uploader(
-                    "Téléchargez une capture d'écran de la page (PNG/JPEG) pour estimer l'attention visuelle",
-                    type=["png", "jpg", "jpeg"],
-                    key="saliency_primary"
+                st.markdown("<div class='section-title'>Layout & Visual Hierarchy</div>", unsafe_allow_html=True)
+                # Show ratios and landmark count in columns
+                lc1, lc2, lc3, lc4 = st.columns(4)
+                heading_ratio = layout_ratios.get("heading_ratio", 0)
+                image_ratio = layout_ratios.get("image_ratio", 0)
+                link_ratio = layout_ratios.get("link_ratio", 0)
+                landmark_count = layout_ratios.get("landmark_count", 0)
+                # Format ratios as elements per thousand words for readability
+                hr_perk = heading_ratio * 1000
+                ir_perk = image_ratio * 1000
+                lr_perk = link_ratio * 1000
+                lc1.metric("Headings per 1000 words", f"{hr_perk:.2f}", "Target ~3")
+                lc2.metric("Images per 1000 words", f"{ir_perk:.2f}", "Target ~2")
+                lc3.metric("Links per 1000 words", f"{lr_perk:.2f}", "Target ~10")
+                lc4.metric("Semantic Landmarks", f"{int(landmark_count)}/4")
+                # Provide explanation and tips
+                st.markdown(
+                    "Plus le ratio d'éléments est proche des valeurs cibles, mieux la hiérarchie visuelle est équilibrée. "
+                    "La présence des éléments <nav>, <header>, <main> et <footer> améliore l'accessibilité et la structure.",
+                    unsafe_allow_html=True,
                 )
-                if uploaded_primary is not None:
-                    fig_sal = generate_saliency_heatmap(uploaded_primary.getvalue())
-                    if fig_sal is not None:
-                        st.pyplot(fig_sal)
-                    else:
-                        st.info(
-                            "La génération de carte de saillance n'est pas disponible (bibliothèques manquantes)."
-                        )
                 st.markdown('</div>', unsafe_allow_html=True)
             # Keywords tab
             with tabs[2]:
@@ -861,25 +886,40 @@ def main() -> None:
                 competitor_score, competitor_suggestions = evaluate_metrics(competitor_metrics)
                 competitor_gamble_suggestions = check_gambling_compliance(competitor_url, competitor_metrics)
                 competitor_suggestions.extend(competitor_gamble_suggestions)
+                # Layout analysis for competitor
+                competitor_layout_score, competitor_layout_ratios, competitor_layout_suggestions = layout_analysis(competitor_metrics)
+                competitor_suggestions.extend(competitor_layout_suggestions)
                 # Content gap analysis
                 gap = content_gap(primary_metrics, competitor_metrics)
-                # Score difference
+                # Score differences
                 score_diff = primary_score - competitor_score
+                layout_diff = layout_score - competitor_layout_score
                 st.header("Competitor Comparison")
-                cmp_tabs = st.tabs(["Competitor Summary", "Content Gap", "Metric Differences", "Competitor Suggestions"])
+                cmp_tabs = st.tabs([
+                    "Competitor Summary",
+                    "Content Gap",
+                    "Metric Differences",
+                    "Competitor Suggestions",
+                ])
+                # Competitor summary
                 with cmp_tabs[0]:
                     st.markdown('<div class="card">', unsafe_allow_html=True)
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Competitor Score", f"{competitor_score}/100", delta=f"{score_diff:+}")
-                    c2.metric("Words", int(competitor_metrics.get("word_count", 0)), delta=int(primary_metrics.get("word_count", 0)) - int(competitor_metrics.get("word_count", 0)))
-                    c3.metric("Flesch", float(competitor_metrics.get("flesch_reading_ease", 0)), delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)))
+                    c2.metric("Layout Score", f"{competitor_layout_score}/100", delta=f"{layout_diff:+}")
+                    c3.metric("Words", int(competitor_metrics.get("word_count", 0)), delta=int(primary_metrics.get("word_count", 0)) - int(competitor_metrics.get("word_count", 0)))
+                    # Additional row for readability and response time
+                    c4, c5, c6 = st.columns(3)
+                    c4.metric("Flesch", float(competitor_metrics.get("flesch_reading_ease", 0)), delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)))
+                    c5.metric("Response Time (s)", float(competitor_metrics.get("response_time_seconds", 0)), delta=float(primary_metrics.get("response_time_seconds", 0)) - float(competitor_metrics.get("response_time_seconds", 0)))
+                    c6.metric("Links", int(competitor_metrics.get("link_count", 0)), delta=int(primary_metrics.get("link_count", 0)) - int(competitor_metrics.get("link_count", 0)))
                     st.markdown("<div class='section-title'>Competitor Metrics</div>", unsafe_allow_html=True)
                     st.json(competitor_metrics)
                     st.markdown('</div>', unsafe_allow_html=True)
+                # Content gap analysis tab
                 with cmp_tabs[1]:
                     st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Content Gap Analysis</div>", unsafe_allow_html=True)
-                    # Display missing keywords and headings separately.  Use Streamlit columns for clarity.
                     missing_kw = gap.get("keywords", [])
                     missing_h2 = gap.get("headings", [])
                     if not missing_kw and not missing_h2:
@@ -897,12 +937,20 @@ def main() -> None:
                         else:
                             h_col.write("Aucune rubrique manquante.")
                     st.markdown('</div>', unsafe_allow_html=True)
+                # Metric differences tab
                 with cmp_tabs[2]:
                     st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Metric Differences (Primary – Competitor)</div>", unsafe_allow_html=True)
                     diff = compare_metrics(primary_metrics, competitor_metrics)
+                    # Include layout ratios differences for completeness
+                    diff["layout_score_difference"] = layout_diff
+                    diff["heading_ratio_difference"] = layout_ratios.get("heading_ratio", 0) - competitor_layout_ratios.get("heading_ratio", 0)
+                    diff["image_ratio_difference"] = layout_ratios.get("image_ratio", 0) - competitor_layout_ratios.get("image_ratio", 0)
+                    diff["link_ratio_difference"] = layout_ratios.get("link_ratio", 0) - competitor_layout_ratios.get("link_ratio", 0)
+                    diff["semantic_landmark_difference"] = layout_ratios.get("landmark_count", 0) - competitor_layout_ratios.get("landmark_count", 0)
                     st.json(diff)
                     st.markdown('</div>', unsafe_allow_html=True)
+                # Competitor suggestions tab
                 with cmp_tabs[3]:
                     st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>Competitor Suggestions</div>", unsafe_allow_html=True)
