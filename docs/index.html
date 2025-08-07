@@ -63,14 +63,16 @@
         page.
       </li>
       <li>
-        Visualises page composition via a simple heatmap of headings,
-        images, links and word counts.  You can also upload your own
-        screenshot to generate a **saliency heatmap** that overlays a
-        predicted attention map on top of the screenshot, highlighting
-        where a viewer’s eyes are likely to land based on contrast and
-        composition.  While not as precise as behavioural tools like
-        Hotjar, this quick approximation helps you grasp the visual
-        hierarchy of your design without tracking real users.
+        Computes a <strong>Layout Score</strong> and visual‑hierarchy metrics.  Instead of
+        asking you to upload a screenshot, the app derives a score from
+        ratios of headings, images and links relative to the total word
+        count and counts how many semantic landmarks (<code>&lt;nav&gt;</code>,
+        <code>&lt;header&gt;</code>, <code>&lt;main&gt;</code>, <code>&lt;footer&gt;</code>) are present.  A balanced
+        ratio (e.g. roughly three headings per thousand words) suggests
+        a clear hierarchy, while extreme values indicate clutter or
+        sparsity.  The app displays these ratios alongside the Layout
+        Score and offers suggestions on how to improve your page
+        structure and legibility.
       </li>
       <li>
         Highlights content gaps by comparing your page’s top keywords and
@@ -97,7 +99,7 @@
       </li>
       <li>
         Presents results in a modern, card‑based interface inspired by
-        Framer.  The Streamlit app groups metrics, heatmaps and
+        Framer.  The Streamlit app groups metrics, scores and
         suggestions into clean panels with consistent typography and soft
         shadows, making the audit easier to read at a glance.
       </li>
