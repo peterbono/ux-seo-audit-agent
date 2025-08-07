@@ -1263,6 +1263,21 @@ def main() -> None:
 
     st.set_page_config(page_title="UX‑SEO Audit", layout="wide")
 
+    # Helper to convert a numeric score into a qualitative label.  This
+    # function assigns an easy‑to‑grasp descriptor to each score so
+    # users can immediately understand whether a page is performing
+    # well or poorly without needing to interpret the raw number.  The
+    # thresholds are deliberately generous to encourage incremental
+    # improvement rather than strict grading.
+    def _score_label(score: float) -> str:
+        if score >= 80:
+            return "Excellent"
+        if score >= 60:
+            return "Good"
+        if score >= 40:
+            return "Fair"
+        return "Poor"
+
     # ---------------------------------------------------------------------
     # Inject a bit of CSS to improve the visual presentation.  The design
     # draws inspiration from modern tools like Framer: light background,
@@ -1352,19 +1367,23 @@ def main() -> None:
             # Summary tab: show key metrics and scores, wrapped in a card
             with tabs[0]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                # Use columns to display metrics in rows of three
-                col1, col2, col3 = st.columns(3)
-                col1.metric("UX/SEO Score", f"{primary_score}/100")
-                col2.metric("Layout Score", f"{layout_score}/100")
-                col3.metric("Tone", str(primary_metrics.get("tone", "unknown")).capitalize())
-                col1.metric("Words", int(primary_metrics.get("word_count", 0)))
-                col2.metric("Flesch Reading Ease", float(primary_metrics.get("flesch_reading_ease", 0)))
-                col3.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
-                col1.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
-                col2.metric("Internal Links", int(primary_metrics.get("internal_link_count", 0)))
-                col3.metric("External Links", int(primary_metrics.get("external_link_count", 0)))
-                st.markdown("<div class='section-title'>Detailed Metrics</div>", unsafe_allow_html=True)
-                st.json(primary_metrics)
+                # Use two rows of columns to summarise the most important metrics.  A qualitative label
+                # accompanies each score so that users don't need to interpret the raw number.
+                row1_col1, row1_col2, row1_col3 = st.columns(3)
+                row1_col1.metric("UX/SEO Score", f"{primary_score}/100", _score_label(primary_score))
+                row1_col2.metric("Layout Score", f"{layout_score}/100", _score_label(layout_score))
+                row1_col3.metric("Business Score", f"{biz_score}/100", _score_label(biz_score))
+                row2_col1, row2_col2, row2_col3 = st.columns(3)
+                row2_col1.metric("Tone", str(primary_metrics.get("tone", "unknown")).capitalize())
+                row2_col2.metric("Words", int(primary_metrics.get("word_count", 0)))
+                row2_col3.metric("Flesch Reading Ease", float(primary_metrics.get("flesch_reading_ease", 0)))
+                row3_col1, row3_col2, row3_col3 = st.columns(3)
+                row3_col1.metric("Response Time (s)", float(primary_metrics.get("response_time_seconds", 0)))
+                row3_col2.metric("Page Size (KB)", int(primary_metrics.get("page_size_bytes", 0) / 1024))
+                row3_col3.metric("Internal Links / External", f"{int(primary_metrics.get('internal_link_count', 0))}/{int(primary_metrics.get('external_link_count', 0))}")
+                # Hide the detailed raw metrics behind an expander so the summary stays clean.
+                with st.expander("Show all raw metrics", expanded=False):
+                    st.json(primary_metrics)
                 st.markdown('</div>', unsafe_allow_html=True)
             # Structure tab
             with tabs[1]:
@@ -1384,10 +1403,26 @@ def main() -> None:
                 lc2.metric("Images per 1000 words", f"{ir_perk:.2f}", "Target ~2")
                 lc3.metric("Links per 1000 words", f"{lr_perk:.2f}", "Target ~10")
                 lc4.metric("Semantic Landmarks", f"{int(landmark_count)}/4")
+                # Show progress bars indicating how close each metric is to its recommended target.
+                # Progress values are capped at 1.0; values above the target appear as a full bar.
+                lc1.progress(min(hr_perk / 3.0, 1.0))
+                lc2.progress(min(ir_perk / 2.0, 1.0))
+                lc3.progress(min(lr_perk / 10.0, 1.0))
+                lc4.progress(min(landmark_count / 4.0, 1.0))
                 # Provide explanation and tips
+                # Provide clear guidance in bullet form.  This makes it easier for users to
+                # understand what the target values mean without reading a dense paragraph.
                 st.markdown(
-                    "Plus le ratio d'éléments est proche des valeurs cibles, mieux la hiérarchie visuelle est équilibrée. "
-                    "La présence des éléments <nav>, <header>, <main> et <footer> améliore l'accessibilité et la structure.",
+                    """
+                    **Conseils de mise en page :**
+                    
+                    - Environ **3 titres** par 1000 mots favorisent une hiérarchie claire.
+                    - Environ **2 images** par 1000 mots maintiennent un bon équilibre texte/visuel.
+                    - Environ **10 liens** par 1000 mots permettent une navigation suffisante sans surcharger la page.
+                    - Utilisez les quatre balises sémantiques (`<nav>`, `<header>`, `<main>`, `<footer>`) pour structurer la page et améliorer l’accessibilité.
+                    
+                    Les barres ci‑dessus montrent à quel point votre page se rapproche de ces valeurs de référence.
+                    """,
                     unsafe_allow_html=True,
                 )
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1413,12 +1448,15 @@ def main() -> None:
                 tc.metric("Trust signals", trust_count, "+" if trust_count > 0 else "")
                 fc.metric("Forms", form_count, "+" if form_count > 0 else "")
                 # Show details: CTA texts and trust keywords
-                if primary_metrics.get("cta_texts"):
-                    st.subheader("Calls‑to‑action trouvées")
-                    st.write(", ".join(primary_metrics.get("cta_texts", [])))
-                if primary_metrics.get("trust_keywords_found"):
-                    st.subheader("Mots‑clés de confiance trouvés")
-                    st.write(", ".join(primary_metrics.get("trust_keywords_found", [])))
+                # Show details in an expander to keep the main view uncluttered.
+                if primary_metrics.get("cta_texts") or primary_metrics.get("trust_keywords_found"):
+                    with st.expander("Voir les textes des CTA et signaux de confiance", expanded=False):
+                        if primary_metrics.get("cta_texts"):
+                            st.markdown("**Calls‑to‑action trouvées**")
+                            st.write(", ".join(primary_metrics.get("cta_texts", [])))
+                        if primary_metrics.get("trust_keywords_found"):
+                            st.markdown("**Mots‑clés de confiance trouvés**")
+                            st.write(", ".join(primary_metrics.get("trust_keywords_found", [])))
                 st.markdown('</div>', unsafe_allow_html=True)
 
             # Growth & Business tab
@@ -1442,11 +1480,57 @@ def main() -> None:
                 r3c1.metric("Recomm. per 1000", f"{biz_ratios['recommendation_per_1000_words']:.2f}", "Target ≥0.5")
                 r3c2.metric("FAQ present", "Yes" if biz_ratios['faq_present'] else "No")
                 r3c3.metric("Search bar", "Yes" if biz_ratios['search_present'] else "No")
+                # Progress bars for business KPIs.  Targets reflect typical good practices for marketing pages.
+                biz_progress_targets = {
+                    'cta_per_1000_words': 2.0,
+                    'trust_per_1000_words': 2.0,
+                    'social_proof_per_1000_words': 1.0,
+                    'promo_per_1000_words': 0.5,
+                    'benefit_per_1000_words': 1.0,
+                    'comparison_per_1000_words': 0.1,
+                    'recommendation_per_1000_words': 0.5,
+                    'forms': 1.0,
+                    'faq_present': 1.0,
+                    'search_present': 1.0,
+                }
+                # Row 1: CTA, Trust and Forms progress
+                pb1c1, pb1c2, pb1c3 = st.columns(3)
+                pb1c1.progress(min(biz_ratios['cta_per_1000_words'] / biz_progress_targets['cta_per_1000_words'], 1.0))
+                pb1c2.progress(min(biz_ratios['trust_per_1000_words'] / biz_progress_targets['trust_per_1000_words'], 1.0))
+                pb1c3.progress(min(biz_ratios['forms'] / biz_progress_targets['forms'], 1.0))
+                pb1c1.caption("CTA")
+                pb1c2.caption("Trust")
+                pb1c3.caption("Forms")
+                # Row 2: Social, Promo, Benefits, Comparisons progress
+                pb2c1, pb2c2, pb2c3, pb2c4 = st.columns(4)
+                pb2c1.progress(min(biz_ratios['social_proof_per_1000_words'] / biz_progress_targets['social_proof_per_1000_words'], 1.0))
+                pb2c2.progress(min(biz_ratios['promo_per_1000_words'] / biz_progress_targets['promo_per_1000_words'], 1.0))
+                pb2c3.progress(min(biz_ratios['benefit_per_1000_words'] / biz_progress_targets['benefit_per_1000_words'], 1.0))
+                pb2c4.progress(min(biz_ratios['comparison_per_1000_words'] / biz_progress_targets['comparison_per_1000_words'], 1.0))
+                pb2c1.caption("Social proof")
+                pb2c2.caption("Promos")
+                pb2c3.caption("Benefits")
+                pb2c4.caption("Comparisons")
+                # Row 3: Recommendations, FAQ and Search progress
+                pb3c1, pb3c2, pb3c3 = st.columns(3)
+                pb3c1.progress(min(biz_ratios['recommendation_per_1000_words'] / biz_progress_targets['recommendation_per_1000_words'], 1.0))
+                pb3c2.progress(min(biz_ratios['faq_present'] / biz_progress_targets['faq_present'], 1.0))
+                pb3c3.progress(min(biz_ratios['search_present'] / biz_progress_targets['search_present'], 1.0))
+                pb3c1.caption("Recommendations")
+                pb3c2.caption("FAQ")
+                pb3c3.caption("Search")
                 # Explanation and suggestions
                 st.markdown(
-                    "Ces indicateurs mesurent l’orientation conversion et croissance de la page. "
-                    "Des CTA et éléments de confiance bien dosés renforcent la conversion, tandis que les preuves sociales, promotions, bénéfices, comparatifs et recommandations favorisent l’engagement. "
-                    "La présence d’une FAQ et d’une barre de recherche améliore la découverte de contenu.",
+                    """
+                    **Conseils de conversion et croissance :**
+                    
+                    - **CTA & confiance :** visez environ 2 appels à l’action et au moins 2 mots de confiance par 1000 mots pour inciter et rassurer l’utilisateur.
+                    - **Preuves sociales & promotions :** incluez au minimum une preuve sociale (avis, témoignages) et des offres promotionnelles régulières pour attirer l’attention.
+                    - **Bénéfices & comparaisons :** mettez en avant les bénéfices clés de votre produit et comparez‑le à d’autres pour aider l’utilisateur à se projeter.
+                    - **FAQ & recherche :** la présence d’une FAQ et d’un champ de recherche facilite la découverte et réduit la friction.
+                    
+                    Les barres ci‑dessus indiquent le niveau d’atteinte des objectifs typiques.
+                    """,
                     unsafe_allow_html=True,
                 )
                 if biz_suggestions:
@@ -1455,7 +1539,7 @@ def main() -> None:
                     st.markdown(html_list, unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             # Zoning & Suggestions tab
-            with tabs[4]:
+            with tabs[5]:
                 st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
                 st.markdown("<div class='section-title'>Zoning & Suggestions</div>", unsafe_allow_html=True)
                 # Group suggestions by zone and append competitor examples
@@ -1464,9 +1548,9 @@ def main() -> None:
                 for zone_name, items in zones.items():
                     if items:
                         shown = True
-                        st.subheader(zone_name)
-                        html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in items) + "</ul>"
-                        st.markdown(html_list, unsafe_allow_html=True)
+                        with st.expander(zone_name, expanded=False):
+                            html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in items) + "</ul>"
+                            st.markdown(html_list, unsafe_allow_html=True)
                 if not shown:
                     st.write("No suggestions – well done!")
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1562,13 +1646,15 @@ def main() -> None:
                     cc1.metric("CTA", c_cta, delta=f"{p_cta - c_cta:+}")
                     cc2.metric("Trust signals", c_trust, delta=f"{p_trust - c_trust:+}")
                     cc3.metric("Forms", c_form, delta=f"{p_form - c_form:+}")
-                    # Details
-                    if competitor_metrics.get("cta_texts"):
-                        st.subheader("CTAs trouvées")
-                        st.write(", ".join(competitor_metrics.get("cta_texts", [])))
-                    if competitor_metrics.get("trust_keywords_found"):
-                        st.subheader("Mots‑clés de confiance trouvés")
-                        st.write(", ".join(competitor_metrics.get("trust_keywords_found", [])))
+                    # Details hidden behind an expander for clarity
+                    if competitor_metrics.get("cta_texts") or competitor_metrics.get("trust_keywords_found"):
+                        with st.expander("Voir les CTA et signaux de confiance du concurrent", expanded=False):
+                            if competitor_metrics.get("cta_texts"):
+                                st.markdown("**Calls‑to‑action trouvées**")
+                                st.write(", ".join(competitor_metrics.get("cta_texts", [])))
+                            if competitor_metrics.get("trust_keywords_found"):
+                                st.markdown("**Mots‑clés de confiance trouvés**")
+                                st.write(", ".join(competitor_metrics.get("trust_keywords_found", [])))
                     st.markdown('</div>', unsafe_allow_html=True)
 
                 # Growth & Business tab
@@ -1593,10 +1679,16 @@ def main() -> None:
                     c9.metric("Recomm./1000", f"{cmp_biz_ratios['recommendation_per_1000_words']:.2f}", delta=f"{prim_biz_ratios['recommendation_per_1000_words'] - cmp_biz_ratios['recommendation_per_1000_words']:+.2f}")
                     c10.metric("FAQ", "Yes" if cmp_biz_ratios['faq_present'] else "No", delta="+" if (prim_biz_ratios['faq_present'] and not cmp_biz_ratios['faq_present']) else ("-" if (not prim_biz_ratios['faq_present'] and cmp_biz_ratios['faq_present']) else "0"))
                     c11.metric("Search", "Yes" if cmp_biz_ratios['search_present'] else "No", delta="+" if (prim_biz_ratios['search_present'] and not cmp_biz_ratios['search_present']) else ("-" if (not prim_biz_ratios['search_present'] and cmp_biz_ratios['search_present']) else "0"))
-                    # Explanation
+                    # Explanation with guidance.  Provide bullet points to interpret the deltas.
                     st.markdown(
-                        "Ces indicateurs comparent la performance business et croissance entre la page primaire et la concurrente. "
-                        "Un score positif indique que la page primaire est plus optimisée, tandis qu’un score négatif signale des opportunités d’amélioration.",
+                        """
+                        **Interprétation des KPI :**
+                        
+                        - Un *delta positif* signifie que votre page fait mieux que le concurrent sur cet indicateur.
+                        - Un *delta négatif* révèle une opportunité d’amélioration par rapport au concurrent.
+                        - Surveillez en particulier les CTA, les signaux de confiance, les preuves sociales et les promotions : plus ils sont nombreux et pertinents, plus ils favorisent la conversion.
+                        - La présence d’une FAQ et d’une barre de recherche peut nettement améliorer la navigation et la découverte de contenu.
+                        """,
                         unsafe_allow_html=True,
                     )
                     # Append competitor business suggestions to competitor suggestions list
@@ -1613,9 +1705,9 @@ def main() -> None:
                         for zone_name, items in cmp_zones.items():
                             if items:
                                 shown_cmp = True
-                                st.subheader(zone_name)
-                                html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in items) + "</ul>"
-                                st.markdown(html_list, unsafe_allow_html=True)
+                                with st.expander(zone_name, expanded=False):
+                                    html_list = "<ul>" + "".join(f"<li>{s}</li>" for s in items) + "</ul>"
+                                    st.markdown(html_list, unsafe_allow_html=True)
                         if not shown_cmp:
                             st.write("No suggestions for the competitor – they are doing quite well!")
                     else:

@@ -70,8 +70,8 @@ additional analyses:
   structural elements indicates that the page is neither overly
   cluttered nor too sparse.  The layout score and accompanying
   suggestions help you understand how to organise content for better
-  legibility and user flow.  Beyond structure and tone, the analyser
-  also inspects business‑oriented growth signals: it looks for
+  legibility and user flow.  In the Streamlit interface, these structural ratios are visualised with **progress bars**, making it easy to see how close your page is to recommended targets (e.g. three headings and two images per 1 000 words, and all four semantic landmarks).
+  Beyond structure and tone, the analyser also inspects business‑oriented growth signals: it looks for
   **social proof** keywords (testimonials, reviews, ratings),
   **promotions and bonuses**, clearly articulated **benefits and
   advantages**, **comparison or versus language** (e.g. “X vs Y”),
@@ -94,7 +94,7 @@ additional analyses:
   (CTA/1 000 words, trust words/1 000 words, social proof/1 000 words,
   etc.).  Ratios outside recommended ranges trigger targeted
   suggestions.  Each KPI and the resulting Business Score are
-  displayed in the **Growth & Business** tab.  The tool then
+  displayed in the **Growth & Business** tab, accompanied by progress bars that show how well your page meets typical benchmarks (for example around two CTAs and at least two trust words per 1 000 words, and at least one social proof and a form).  The tool then
   recommends adding or balancing these elements – such as
   including testimonials, highlighting key benefits, offering a
   promotion, or adding a FAQ – to enhance the page’s credibility,
@@ -110,6 +110,13 @@ additional analyses:
   competitor, the tool adds example notes to the relevant zones
   highlighting where the competitor performs better (e.g., more
   prominent CTAs or stronger trust signals).
+
+  - **Improved result presentation** – the Streamlit interface now
+    accompanies each numeric score with a qualitative label (e.g. *Excellent*,
+    *Good*, *Fair*, *Poor*) so you can quickly gauge performance without
+    interpreting the raw number.  Detailed raw metrics and lists of calls‑to‑action
+    or trust keywords are tucked away behind expanders, keeping the main view
+    clean while still providing full access to the data when needed.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -148,6 +155,7 @@ presence of a single H1, alt text ratio, internal/external link
   along with a summary of how many headings, images and links appear per
   thousand words and counts how many semantic landmarks (nav, header,
   main, footer) are present to assess structural completeness.
+  Visual **progress bars** in the Structure tab highlight how close these ratios are to recommended values for a balanced hierarchy.
 
   To serve marketers and affiliate sites, the Streamlit app also
   reports the number of calls‑to‑action, trust keywords (e.g. “secure”,
@@ -167,6 +175,12 @@ presence of a single H1, alt text ratio, internal/external link
   and alt attributes help both users and search engines understand
   images【467421527218735†L89-L96】【600788209180035†L864-L869】.
 
+  To help you interpret the results at a glance, the app assigns
+  qualitative labels—such as *Excellent*, *Good*, *Fair* or *Poor*—to
+  each score.  Detailed raw metrics and lists of CTA or trust keywords
+  are hidden behind expanders, keeping the interface clean while allowing
+  you to drill down when needed.
+
   Finally, all recommendations are organised into a **Zoning & Suggestions**
   tab.  This view groups suggestions by common page regions (meta
   head, navigation & header, hero & CTA, main content, trust & social
@@ -175,8 +189,7 @@ presence of a single H1, alt text ratio, internal/external link
   prioritise improvements where they matter most.  When you provide a
   competitor URL, the zoning tab also notes where the competitor site
   excels – for example, highlighting that a rival page includes more
-  calls‑to‑action or stronger trust cues – so you can visualise what
-  “good” looks like.
+  calls‑to‑action ou de plus forts signaux de confiance – ce qui vous permet de visualiser concrètement des exemples à suivre.
 
 ## 📦 Installation
 
