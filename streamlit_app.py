@@ -36,6 +36,7 @@ try:
 except ImportError:
     st = None  # type: ignore
 from urllib.parse import urlparse
+from io import BytesIO  # for reading uploaded images
 
 
 def compute_metrics(url: str) -> Dict[str, object]:
@@ -502,29 +503,23 @@ def content_gap(primary: Dict[str, object], competitor: Dict[str, object]) -> Li
 
 
 def generate_heatmap(metrics: Dict[str, object]):
-    """Generate a simple heatmap figure from page element counts.
+    """Create a heatmap representing the relative distribution of key page elements.
 
-    Instead of a true saliency model, this function visualises the relative
-    distribution of key elements (headings, images, links, words) using a
-    one‑dimensional heatmap.
-
-    If the ``matplotlib`` or ``numpy`` modules are not available (e.g. on
-    minimal serverless platforms), the function returns ``None`` to signal
-    that no heatmap can be created.  The caller should handle this case
-    gracefully by skipping the chart or displaying a warning.
+    This helper visualises how many headings (H1–H3), images, links and words
+    appear on a page by displaying a one‑row heatmap.  It is intended as a
+    lightweight alternative to true user‑behaviour heatmaps and requires only
+    ``matplotlib`` and ``numpy``.  If these libraries are missing, the
+    function returns ``None`` so the caller can degrade gracefully.
 
     :param metrics: Metrics dictionary for a page.
-    :returns: A matplotlib figure object ready for rendering, or ``None`` if
-              the required modules are missing.
+    :returns: A matplotlib figure ready for rendering, or ``None`` if the
+              plotting libraries are unavailable.
     """
-    # Attempt to import plotting libraries at runtime.  If unavailable,
-    # return None so the UI can avoid raising ImportError.
     try:
         import matplotlib.pyplot as plt  # type: ignore
         import numpy as np  # type: ignore
     except ImportError:
         return None
-
     labels = ["H1", "H2", "H3", "Images", "Links", "Words"]
     values = [
         metrics.get("h1_count", 0),
@@ -534,16 +529,85 @@ def generate_heatmap(metrics: Dict[str, object]):
         metrics.get("link_count", 0),
         metrics.get("word_count", 0),
     ]
-    data = np.array([values])  # shape (1, n)
+    data = np.array([values])
     fig, ax = plt.subplots(figsize=(len(labels) * 0.8, 2))
-    ax.imshow(data, aspect="auto")  # the return value (cax) is unused
+    im = ax.imshow(data, aspect="auto")
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_yticks([])  # hide y axis labels
-    ax.set_title("Relative distribution of page elements")
-    # Add text annotations for values
+    ax.set_yticks([])
+    ax.set_title("Distribution of page elements")
     for i, val in enumerate(values):
         ax.text(i, 0, f"{val}", va="center", ha="center", fontsize=9)
+    return fig
+
+
+def _spectral_residual_saliency(img) -> "np.ndarray":
+    """Compute a saliency map using the spectral residual algorithm.
+
+    This algorithm approximates visual attention by analysing the log spectrum of
+    the image's Fourier transform.  It is a lightweight technique that does not
+    require training data and can run on serverless platforms.  The returned
+    saliency map is normalised to the range [0, 1].
+
+    :param img: A BGR image as a NumPy array.
+    :returns: A 2‑D NumPy array representing the saliency map.
+    """
+    import cv2  # type: ignore
+    import numpy as np  # type: ignore
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray = np.float32(gray)
+    # Compute the 2D FFT and separate magnitude and phase
+    dft = cv2.dft(gray, flags=cv2.DFT_COMPLEX_OUTPUT)
+    real, imag = dft[:, :, 0], dft[:, :, 1]
+    mag, phase = cv2.cartToPolar(real, imag)
+    # Log amplitude spectrum
+    log_mag = np.log(mag + 1e-8)
+    # Average filter (spectral residual)
+    avg_log_mag = cv2.boxFilter(log_mag, -1, (3, 3))
+    spectral_residual = log_mag - avg_log_mag
+    # Convert back to complex form
+    exp_residual = np.exp(spectral_residual)
+    real2, imag2 = cv2.polarToCart(exp_residual, phase)
+    complex_spectrum = cv2.merge([real2, imag2])
+    # Inverse FFT
+    inverse = cv2.idft(complex_spectrum, flags=cv2.DFT_SCALE | cv2.DFT_REAL_OUTPUT)
+    saliency_map = inverse ** 2
+    saliency_map = cv2.GaussianBlur(saliency_map, (9, 9), sigmaX=0)
+    cv2.normalize(saliency_map, saliency_map, 0, 1, cv2.NORM_MINMAX)
+    return saliency_map
+
+
+def generate_saliency_heatmap(image_bytes: bytes):
+    """Generate a saliency heatmap from an uploaded image.
+
+    The function accepts raw image bytes (PNG or JPEG) and computes a
+    visual saliency map using the spectral residual algorithm.  It returns
+    a matplotlib figure displaying the heatmap.  If the required
+    libraries (Pillow, OpenCV, NumPy, Matplotlib) are unavailable, ``None``
+    is returned.
+
+    :param image_bytes: Raw bytes of the uploaded image file.
+    :returns: A matplotlib figure or ``None`` if dependencies are missing.
+    """
+    try:
+        from PIL import Image  # type: ignore
+        import cv2  # type: ignore
+        import numpy as np  # type: ignore
+        import matplotlib.pyplot as plt  # type: ignore
+    except ImportError:
+        return None
+    # Read image from bytes
+    try:
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    except Exception:
+        return None
+    img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    saliency_map = _spectral_residual_saliency(img_bgr)
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.imshow(saliency_map, cmap="hot")
+    ax.axis("off")
+    ax.set_title("Predicted visual saliency")
     return fig
 
 
@@ -686,14 +750,31 @@ def main() -> None:
             # Heatmap tab
             with tabs[1]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                fig = generate_heatmap(primary_metrics)
-                if fig is not None:
-                    st.pyplot(fig)
+                # Element distribution heatmap
+                st.markdown("<div class='section-title'>Element Distribution</div>", unsafe_allow_html=True)
+                fig_dist = generate_heatmap(primary_metrics)
+                if fig_dist is not None:
+                    st.pyplot(fig_dist)
                 else:
                     st.info(
-                        "Matplotlib (or NumPy) is not installed in this environment."
-                        " Heatmap generation is disabled."
+                        "Matplotlib (or NumPy) is not installed in this environment. "
+                        "Distribution heatmap generation is disabled."
                     )
+                # Visual saliency heatmap (requires uploaded screenshot)
+                st.markdown("<div class='section-title'>Visual Saliency (optional)</div>", unsafe_allow_html=True)
+                uploaded_primary = st.file_uploader(
+                    "Téléchargez une capture d'écran de la page (PNG/JPEG) pour estimer l'attention visuelle",
+                    type=["png", "jpg", "jpeg"],
+                    key="saliency_primary"
+                )
+                if uploaded_primary is not None:
+                    fig_sal = generate_saliency_heatmap(uploaded_primary.getvalue())
+                    if fig_sal is not None:
+                        st.pyplot(fig_sal)
+                    else:
+                        st.info(
+                            "La génération de carte de saillance n'est pas disponible (bibliothèques manquantes)."
+                        )
                 st.markdown('</div>', unsafe_allow_html=True)
             # Keywords tab
             with tabs[2]:
