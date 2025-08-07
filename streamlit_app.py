@@ -68,6 +68,18 @@ def compute_metrics(url: str) -> Dict[str, object]:
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
+    # ---------------------------------------------------------------------------
+    # Extract the full page text early.  Assigning this here ensures that the
+    # local variable ``text`` is always initialised before any heuristics that
+    # depend on it.  Some of the business and growth signals scan the page
+    # content using ``lower_text``; if ``text`` were defined later, Python
+    # would treat it as a local variable and raise an UnboundLocalError when
+    # referenced in an earlier scope.  By defining ``text`` at the top of
+    # compute_metrics, we guarantee it is available throughout the function.
+    text = soup.get_text(separator=" ", strip=True)
+    metrics["plain_text"] = text
+    lower_text = text.lower()
+
     # Title and meta description
     title_tag = soup.find("title")
     title = title_tag.get_text(strip=True) if title_tag else ""
@@ -157,12 +169,6 @@ def compute_metrics(url: str) -> Dict[str, object]:
         "licensed", "regulated", "mga", "malta gaming", "trust", "fair",
         "état", "témoignages", "avis", "review", "testimonials"
     }
-    # Extract the full page text once for trust signal detection.  We defer storing
-    # this as metrics["plain_text"] until later, but reusing it here avoids
-    # referencing an undefined variable.  Without this, referencing ``text``
-    # before it is assigned causes a runtime error (see issue reported by users).
-    full_page_text = soup.get_text(separator=" ", strip=True)
-    lower_text = full_page_text.lower()
     found_trust = set()
     for kw in trust_keywords:
         if kw in lower_text:
@@ -316,10 +322,10 @@ def compute_metrics(url: str) -> Dict[str, object]:
 
     # ---------------------------------------------------------------------------
     # Readability and text statistics
-    # Extract all visible text from the page
-    text = soup.get_text(separator=" ", strip=True)
-    # Expose plain text so other functions (e.g. content gap, tone) can reuse it
-    metrics["plain_text"] = text
+    # At this point ``text`` has already been extracted and stored in
+    # metrics["plain_text"] near the top of this function.  Reuse it here
+    # without reassigning, so we don't shadow the earlier assignment or
+    # inadvertently trigger an UnboundLocalError.
 
     # Basic word, sentence and syllable counts for readability
     words = text.split()
