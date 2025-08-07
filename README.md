@@ -114,9 +114,14 @@ additional analyses:
   - **Improved result presentation** – the Streamlit interface now
     accompanies each numeric score with a qualitative label (e.g. *Excellent*,
     *Good*, *Fair*, *Poor*) so you can quickly gauge performance without
-    interpreting the raw number.  Detailed raw metrics and lists of calls‑to‑action
-    or trust keywords are tucked away behind expanders, keeping the main view
-    clean while still providing full access to the data when needed.
+    interpreting the raw number.  Progress bars sit underneath each high‑level
+    score (UX/SEO, layout and business), showing at a glance how close the
+    page is to the maximum 100.  When you analyse a competitor, a bar chart
+    compares the three scores side by side so you can immediately spot
+    relative strengths and weaknesses.  Detailed raw metrics and lists of
+    calls‑to‑action or trust keywords are tucked away behind expanders, keeping
+    the main view clean while still providing full access to the data when
+    needed.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -177,9 +182,13 @@ presence of a single H1, alt text ratio, internal/external link
 
   To help you interpret the results at a glance, the app assigns
   qualitative labels—such as *Excellent*, *Good*, *Fair* or *Poor*—to
-  each score.  Detailed raw metrics and lists of CTA or trust keywords
-  are hidden behind expanders, keeping the interface clean while allowing
-  you to drill down when needed.
+  each score and displays a short progress bar beneath it.  The bars
+  indicate the percentage of the maximum possible score.  When you
+  provide a competitor URL, a small bar chart appears in the competitor
+  summary comparing your page’s UX/SEO, layout and business scores
+  against those of the rival site.  Detailed raw metrics and lists of
+  CTA or trust keywords are hidden behind expanders, keeping the
+  interface clean while allowing you to drill down when needed.
 
   Finally, all recommendations are organised into a **Zoning & Suggestions**
   tab.  This view groups suggestions by common page regions (meta

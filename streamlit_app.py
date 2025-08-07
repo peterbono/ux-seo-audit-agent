@@ -1384,6 +1384,21 @@ def main() -> None:
                 # Hide the detailed raw metrics behind an expander so the summary stays clean.
                 with st.expander("Show all raw metrics", expanded=False):
                     st.json(primary_metrics)
+                # Add simple progress indicators for each high‑level score.  These
+                # bars provide an at‑a‑glance view of how close the scores are
+                # to perfection (100).  We use three columns so the bars
+                # align nicely under their respective labels.  Values are
+                # capped between 0 and 1 for the progress widget.
+                prog_cols = st.columns(3)
+                with prog_cols[0]:
+                    st.progress(primary_score / 100.0 if primary_score <= 100 else 1.0)
+                    st.caption("UX/SEO")
+                with prog_cols[1]:
+                    st.progress(layout_score / 100.0 if layout_score <= 100 else 1.0)
+                    st.caption("Layout")
+                with prog_cols[2]:
+                    st.progress(biz_score / 100.0 if biz_score <= 100 else 1.0)
+                    st.caption("Business")
                 st.markdown('</div>', unsafe_allow_html=True)
             # Structure tab
             with tabs[1]:
@@ -1594,6 +1609,35 @@ def main() -> None:
                     c4.metric("Flesch", float(competitor_metrics.get("flesch_reading_ease", 0)), delta=float(primary_metrics.get("flesch_reading_ease", 0)) - float(competitor_metrics.get("flesch_reading_ease", 0)))
                     c5.metric("Response Time (s)", float(competitor_metrics.get("response_time_seconds", 0)), delta=float(primary_metrics.get("response_time_seconds", 0)) - float(competitor_metrics.get("response_time_seconds", 0)))
                     c6.metric("Links", int(competitor_metrics.get("link_count", 0)), delta=int(primary_metrics.get("link_count", 0)) - int(competitor_metrics.get("link_count", 0)))
+                    # After showing the basic metrics, include a simple bar chart
+                    # comparing the three high‑level scores (UX/SEO, layout and business)
+                    # between your page and the competitor.  The chart helps visualise
+                    # relative strengths at a glance.  It is generated with
+                    # Matplotlib and NumPy if available; if the libraries are not
+                    # installed, the chart is skipped silently.
+                    try:
+                        import numpy as np  # type: ignore
+                        import matplotlib.pyplot as plt  # type: ignore
+                        score_labels = ["UX/SEO", "Layout", "Business"]
+                        primary_vals = [primary_score, layout_score, biz_score]
+                        competitor_vals = [competitor_score, competitor_layout_score, cmp_biz_score]
+                        x = np.arange(len(score_labels))
+                        width = 0.35
+                        fig, ax = plt.subplots()
+                        ax.bar(x - width / 2, primary_vals, width, label="Your Page")
+                        ax.bar(x + width / 2, competitor_vals, width, label="Competitor")
+                        ax.set_xticks(x)
+                        ax.set_xticklabels(score_labels, rotation=0, ha="center")
+                        ax.set_ylabel("Score")
+                        ax.set_title("Score Comparison")
+                        ax.legend()
+                        st.pyplot(fig)
+                    except Exception:
+                        # If Matplotlib or NumPy are unavailable, fall back to displaying
+                        # a textual note instead of a chart.  We avoid raising an
+                        # exception so the interface continues to work on lightweight
+                        # deployments.
+                        st.info("Score comparison chart unavailable (Matplotlib not installed).")
                     st.markdown("<div class='section-title'>Competitor Metrics</div>", unsafe_allow_html=True)
                     st.json(competitor_metrics)
                     st.markdown('</div>', unsafe_allow_html=True)
