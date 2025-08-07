@@ -60,9 +60,12 @@ additional analyses:
   looks for semantic landmarks like `<nav>`, `<header>`, `<main>` and
   `<footer>` and flags their absence, since these elements help
   search engines and assistive technologies understand page structure.
-  In addition, it computes readability (Flesch reading ease), measures
-  the prevalence of personal pronouns and exclamation points to infer
-  tone, extracts the top keywords on the page and performs a
+  In addition, it computes readability (Flesch reading ease), extracts
+  the top keywords and the most common two‑word phrases on the page and
+  measures how many personal pronouns and exclamation points appear
+  relative to the total word count.  A high pronoun ratio can make copy
+  feel more direct or sales‑driven, while frequent exclamation points
+  may signal urgency or hype.  It then performs a
   **layout & visual hierarchy analysis**.  This analysis derives a
   "Layout Score" based on ratios of headings, images and links
   relative to the amount of text, and checks for semantic landmarks
@@ -125,8 +128,10 @@ additional analyses:
     the most frequent single‑word keywords and the most common
     two‑word phrases to reveal deeper patterns in your content.  It also
     reports **lexical richness** (the proportion of unique words to the total
-    vocabulary) and the total count of unique words, giving you a quick
-    indication of how varied or repetitive your language is.
+    vocabulary), the total count of unique words, the **pronoun ratio** (the
+    share of “you”, “we”, “us” and similar pronouns relative to all words)
+    and the **exclamation count**.  These metrics provide a quick
+    indication of how varied, conversational or emphatic your language is.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
