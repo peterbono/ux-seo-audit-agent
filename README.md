@@ -70,19 +70,32 @@ additional analyses:
   structural elements indicates that the page is neither overly
   cluttered nor too sparse.  The layout score and accompanying
   suggestions help you understand how to organise content for better
-  legibility and user flow.
+  legibility and user flow.  Beyond structure and tone, the analyser
+  also inspects business‑oriented growth signals: it looks for
+  **social proof** keywords (testimonials, reviews, ratings),
+  **promotions and bonuses**, clearly articulated **benefits and
+  advantages**, **comparison or versus language** (e.g. “X vs Y”),
+  **cross‑sell and recommendation cues**, the presence of a **FAQ or
+  help section**, and whether a **search bar** is available to aid
+  navigation.  Each absence triggers targeted recommendations to
+  strengthen the page’s conversion potential and user journey.
 
   Beyond structural and technical metrics, the analyser also
-  **captures business conversion signals**.  It counts how many
+  **captures business conversion and growth signals**.  It counts how many
   calls‑to‑action (CTA) buttons or links appear on the page,
   detects the presence of trust‑building keywords (e.g. “SSL”,
   “licence”, “avis clients”) and records the number of forms used for
-  lead capture.  These statistics are compared against best‑practice
-  ranges.  The tool then recommends adding a prominent CTA if none
-  exists, limiting overly aggressive CTAs, including badges or
-  testimonials to reassure visitors, and inserting simple sign‑up
-  forms.  Collectively, these extra signals go beyond a simple GPT
-  prompt to provide concrete data for conversion optimisation.
+  lead capture.  It also scans for social proof (testimonials,
+  reviews), promotions and bonuses, explicit statements of benefits,
+  comparison phrases like “vs” or “comparatif”, cross‑sell cues,
+  FAQ/help sections and a search bar.  Each metric is displayed in
+  the **Growth & Business** tab of the Streamlit interface.  The tool
+  then recommends adding or balancing these elements – such as
+  including testimonials, highlighting key benefits, offering a
+  promotion, or adding a FAQ – to enhance the page’s credibility,
+  usability and conversion rate.  Collectively, these extra signals
+  go beyond a simple GPT prompt to provide concrete data for growth
+  and conversion optimisation.
 - **Competitor benchmarking** – specify one or more competitor URLs to
   compare scores and identify differentiators.
  - **Content gap analysis** – highlights important keywords and H2
@@ -124,15 +137,19 @@ presence of a single H1, alt text ratio, internal/external link
 
   To serve marketers and affiliate sites, the Streamlit app also
   reports the number of calls‑to‑action, trust keywords (e.g. “secure”,
-  “licence”, “avis clients”) and forms found on the page.  These
-  statistics are displayed in a dedicated **Conversion** tab, where
-  you can see CTA texts and trust keywords detected and how your
-  numbers compare to a competitor.  For gambling or betting sites,
-  the app checks for responsible gaming notices and age restrictions.
-  The tool then generates a set of actionable suggestions to improve the
-  page.  These heuristics draw on industry guidance: canonical tags
-  tell search engines which version of a page to index【600788209180035†L501-L540】,
-  Open Graph tags control how links appear on social media【600788209180035†L553-L599】,
+  “licence”, “avis clients”) and forms found on the page.  It goes
+  further by scanning for social proof (testimonials, reviews),
+  promotions and bonuses, explicit benefits, comparison phrases,
+  cross‑sell cues, FAQ/help sections and the presence of a search bar.
+  These statistics are displayed in dedicated **Conversion** and
+  **Growth & Business** tabs, where you can see CTA texts, trust
+  keywords and growth signals detected and compare them with a
+  competitor.  For gambling or betting sites, the app checks for
+  responsible gaming notices and age restrictions.  The tool then
+  generates a set of actionable suggestions to improve the page.  These
+  heuristics draw on industry guidance: canonical tags tell search
+  engines which version of a page to index【600788209180035†L501-L540】,
+  Open Graph tags control how links appear on social media【600788209180035†L553-L599】,
   and alt attributes help both users and search engines understand
   images【467421527218735†L89-L96】【600788209180035†L864-L869】.
 

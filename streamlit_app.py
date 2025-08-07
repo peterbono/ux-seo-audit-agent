@@ -177,6 +177,68 @@ def compute_metrics(url: str) -> Dict[str, object]:
     metrics["form_count"] = len(soup.find_all("form"))
 
     # ---------------------------------------------------------------------------
+    # Business growth and content signals
+    # In addition to basic conversion signals, affiliate and marketing pages
+    # often leverage social proof, promotions, comparisons, cross‑sells and
+    # help sections to encourage engagement and conversion.  We scan the full
+    # text for keywords that indicate these elements and record simple counts.
+    # These counts feed into suggestions and business‑oriented KPIs later on.
+
+    # Social proof: testimonials, reviews, ratings
+    social_keywords = {
+        "testimonial", "testimonials", "avis", "reviews", "review",
+        "note", "notes", "évaluation", "ratings", "rating", "retour",
+        "feedback", "témoignage"
+    }
+    social_count = sum(1 for kw in social_keywords if kw in lower_text)
+    metrics["social_proof_count"] = social_count
+
+    # Promotions and bonuses
+    promo_keywords = {
+        "bonus", "promo", "promotion", "réduction", "discount",
+        "code", "coupon", "gratuit", "offre", "offres"
+    }
+    promo_count = sum(1 for kw in promo_keywords if kw in lower_text)
+    metrics["promo_count"] = promo_count
+
+    # Benefits and advantages
+    benefit_keywords = {
+        "avantage", "avantages", "benefit", "benefits", "pourquoi",
+        "pourquoi nous", "avantageux", "bénéfice"
+    }
+    benefit_count = sum(1 for kw in benefit_keywords if kw in lower_text)
+    metrics["benefit_count"] = benefit_count
+
+    # Comparison or versus content (e.g., "X vs Y", "compare")
+    comparison_keywords = {" vs ", " versus ", "compare", "comparaison"}
+    comparison_count = sum(1 for kw in comparison_keywords if kw in lower_text)
+    metrics["comparison_count"] = comparison_count
+
+    # Cross‑sell and recommendation cues
+    recommendation_keywords = {
+        "recommend", "recommended", "similar", "related", "vous pourriez aussi aimer",
+        "people also", "articles similaires", "produits similaires"
+    }
+    recommendation_count = sum(1 for kw in recommendation_keywords if kw in lower_text)
+    metrics["recommendation_count"] = recommendation_count
+
+    # Frequently asked questions or help section
+    faq_keywords = {"faq", "questions fréquentes", "foire aux questions",
+                    "faqs", "aide", "help"}
+    metrics["faq_present"] = any(kw in lower_text for kw in faq_keywords)
+
+    # Search bar presence: look for <input type="search"> elements or input fields
+    # with a 'search' role.  We also check for text placeholders commonly used
+    # in search fields (e.g., "search", "rechercher").
+    search_inputs = soup.find_all("input", attrs={"type": "search"})
+    # Check for text inputs with placeholder containing search terms
+    for input_elem in soup.find_all("input", attrs={"type": "text"}):
+        placeholder = input_elem.get("placeholder", "").lower()
+        if "search" in placeholder or "rechercher" in placeholder:
+            search_inputs.append(input_elem)
+    metrics["search_present"] = len(search_inputs) > 0
+
+    # ---------------------------------------------------------------------------
     # Additional on‑page signals
     # Many subtle elements influence UX and SEO beyond the basic counts above.  We
     # capture a few of them here to differentiate the tool from a simple GPT
@@ -619,6 +681,55 @@ def evaluate_metrics(metrics: Dict[str, object]) -> Tuple[int, List[str]]:
         "Donnez un feedback explicite aux actions des utilisateurs (messages de confirmation, changements visuels) et offrez la possibilité d’annuler facilement (heuristiques de visibilité de l’état du système et de contrôle par l’utilisateur)."
     )
 
+    # -------------------------------------------------------------------
+    # Business and growth heuristics
+    # Le manque de certaines sections clés (ex. témoignages, promotions, FAQ) peut
+    # limiter la conversion ou la confiance.  Nous émettons des recommandations
+    # spécifiques basées sur les nouveaux signaux de croissance calculés dans
+    # compute_metrics().  Chaque absence déduit un petit nombre de points afin
+    # de mettre l’accent sur leur importance sans alourdir excessivement
+    # l’impact sur le score global.
+    social_count = metrics.get("social_proof_count", 0)
+    if isinstance(social_count, int) and social_count == 0:
+        suggestions.append(
+            "Ajoutez des preuves sociales (témoignages, avis ou notes) pour renforcer la confiance et la crédibilité."
+        )
+        score -= 2
+    promo_count = metrics.get("promo_count", 0)
+    if isinstance(promo_count, int) and promo_count == 0:
+        suggestions.append(
+            "Envisagez d’inclure des promotions, codes promo ou bonus pour stimuler les conversions et l’engagement."
+        )
+        score -= 1
+    benefit_count = metrics.get("benefit_count", 0)
+    if isinstance(benefit_count, int) and benefit_count == 0:
+        suggestions.append(
+            "Mettez clairement en avant les bénéfices et avantages de votre offre pour persuader les visiteurs."
+        )
+        score -= 1
+    comparison_count = metrics.get("comparison_count", 0)
+    if isinstance(comparison_count, int) and comparison_count == 0:
+        suggestions.append(
+            "Intégrez des comparatifs ou des tableaux ‘X vs Y’ pour montrer votre valeur face aux concurrents."
+        )
+        score -= 1
+    recommendation_count = metrics.get("recommendation_count", 0)
+    if isinstance(recommendation_count, int) and recommendation_count == 0:
+        suggestions.append(
+            "Ajoutez des recommandations ou des sections ‘vous pourriez aussi aimer’ pour augmenter la valeur moyenne d’achat."
+        )
+        score -= 1
+    if not metrics.get("faq_present"):
+        suggestions.append(
+            "Proposez une FAQ ou une rubrique d’aide pour répondre aux questions courantes et réduire le taux de rebond."
+        )
+        score -= 1
+    if not metrics.get("search_present"):
+        suggestions.append(
+            "Intégrez un champ de recherche ou des filtres pour aider les visiteurs à trouver rapidement ce qu’ils cherchent."
+        )
+        score -= 1
+
     # End tone and content heuristics
 
     # Final clipping
@@ -920,12 +1031,13 @@ def main() -> None:
 
             # UI layout for primary page
             st.header("Primary Page Results")
-            # Tabs: Summary, Structure and Visual Hierarchy, Keywords, Conversion, Suggestions
+            # Tabs: Summary, Structure and Visual Hierarchy, Keywords, Conversion, Growth & Business, Suggestions
             tabs = st.tabs([
                 "Summary",
                 "Structure",
                 "Keywords",
                 "Conversion",
+                "Growth",
                 "Suggestions",
             ])
             # Summary tab: show key metrics and scores, wrapped in a card
@@ -999,6 +1111,40 @@ def main() -> None:
                     st.subheader("Mots‑clés de confiance trouvés")
                     st.write(", ".join(primary_metrics.get("trust_keywords_found", [])))
                 st.markdown('</div>', unsafe_allow_html=True)
+
+            # Growth & Business tab
+            with tabs[4]:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>Growth & Business</div>", unsafe_allow_html=True)
+                # Extract business metrics
+                sp_count = int(primary_metrics.get("social_proof_count", 0))
+                pr_count = int(primary_metrics.get("promo_count", 0))
+                bn_count = int(primary_metrics.get("benefit_count", 0))
+                cp_count = int(primary_metrics.get("comparison_count", 0))
+                rc_count = int(primary_metrics.get("recommendation_count", 0))
+                faq_present = bool(primary_metrics.get("faq_present", False))
+                search_present = bool(primary_metrics.get("search_present", False))
+                # Display metrics in a grid
+                g1, g2, g3, g4 = st.columns(4)
+                g1.metric("Social proof", sp_count, "+" if sp_count > 0 else "")
+                g2.metric("Promos & bonuses", pr_count, "+" if pr_count > 0 else "")
+                g3.metric("Benefits", bn_count, "+" if bn_count > 0 else "")
+                g4.metric("Comparisons", cp_count, "+" if cp_count > 0 else "")
+                g5, g6, g7, g8 = st.columns(4)
+                g5.metric("Recommendations", rc_count, "+" if rc_count > 0 else "")
+                g6.metric("FAQ present", "Yes" if faq_present else "No", "")
+                g7.metric("Search bar", "Yes" if search_present else "No", "")
+                # Provide simple explanation
+                st.markdown(
+                    "Ces indicateurs évaluent la présence d’éléments orientés conversion et croissance : \n"
+                    "• Les preuves sociales (avis, témoignages) renforcent la crédibilité.\n"
+                    "• Les promotions et bonus incitent à l’action.\n"
+                    "• Les bénéfices clairement exprimés persuadent les visiteurs.\n"
+                    "• Les comparatifs et recommandations stimulent la décision et la valeur moyenne des paniers.\n"
+                    "• Une FAQ et une barre de recherche améliorent l’auto‑assistance et réduisent le taux de rebond.",
+                    unsafe_allow_html=True,
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
             # Suggestions tab
             with tabs[4]:
                 st.markdown('<div class="card suggestions">', unsafe_allow_html=True)
@@ -1032,6 +1178,7 @@ def main() -> None:
                     "Content Gap",
                     "Metric Differences",
                     "Conversion",
+                    "Growth",
                     "Competitor Suggestions",
                 ])
                 # Competitor summary
@@ -1105,6 +1252,35 @@ def main() -> None:
                     if competitor_metrics.get("trust_keywords_found"):
                         st.subheader("Mots‑clés de confiance trouvés")
                         st.write(", ".join(competitor_metrics.get("trust_keywords_found", [])))
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                # Growth & Business tab
+                with cmp_tabs[4]:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown("<div class='section-title'>Growth & Business</div>", unsafe_allow_html=True)
+                    sp_c = int(competitor_metrics.get("social_proof_count", 0))
+                    pr_c = int(competitor_metrics.get("promo_count", 0))
+                    bn_c = int(competitor_metrics.get("benefit_count", 0))
+                    cp_c = int(competitor_metrics.get("comparison_count", 0))
+                    rc_c = int(competitor_metrics.get("recommendation_count", 0))
+                    faq_c = bool(competitor_metrics.get("faq_present", False))
+                    search_c = bool(competitor_metrics.get("search_present", False))
+                    # Display competitor metrics with deltas
+                    d1, d2, d3, d4 = st.columns(4)
+                    d1.metric("Social proof", sp_c, delta=f"{int(primary_metrics.get('social_proof_count', 0)) - sp_c:+}")
+                    d2.metric("Promos", pr_c, delta=f"{int(primary_metrics.get('promo_count', 0)) - pr_c:+}")
+                    d3.metric("Benefits", bn_c, delta=f"{int(primary_metrics.get('benefit_count', 0)) - bn_c:+}")
+                    d4.metric("Comparisons", cp_c, delta=f"{int(primary_metrics.get('comparison_count', 0)) - cp_c:+}")
+                    d5, d6, d7, d8 = st.columns(4)
+                    d5.metric("Recommendations", rc_c, delta=f"{int(primary_metrics.get('recommendation_count', 0)) - rc_c:+}")
+                    # For FAQ and search, convert boolean to 1/0 for delta
+                    d6.metric("FAQ", "Yes" if faq_c else "No", delta="+" if (primary_metrics.get('faq_present', False) and not faq_c) else ("-" if (not primary_metrics.get('faq_present', False) and faq_c) else "0"))
+                    d7.metric("Search", "Yes" if search_c else "No", delta="+" if (primary_metrics.get('search_present', False) and not search_c) else ("-" if (not primary_metrics.get('search_present', False) and search_c) else "0"))
+                    # Explanation (same as primary)
+                    st.markdown(
+                        "Ces indicateurs comparent les éléments de croissance et conversion. Un score plus élevé indique une meilleure utilisation des témoignages, promotions, bénéfices, comparatifs, recommandations, FAQ et recherche.",
+                        unsafe_allow_html=True,
+                    )
                     st.markdown('</div>', unsafe_allow_html=True)
                 # Competitor suggestions tab
                 with cmp_tabs[4]:

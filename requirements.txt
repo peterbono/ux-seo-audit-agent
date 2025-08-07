@@ -4,8 +4,11 @@ tqdm>=4.66.0
 # Optional: install openai if you plan to use the AI recommendations
 openai>=0.28.0
 streamlit>=1.33.0
-matplotlib>=3.7.0
-numpy>=1.25.0
-# Libraries for optional saliency analysis and image processing
-opencv-python-headless>=4.9.0.80
-Pillow>=10.2.0
+# The lightweight audit no longer relies on matplotlib, numpy or OpenCV.
+# Those packages are omitted to keep deployment minimal.  If you wish
+# to enable saliency heatmaps or other visualisations in the future,
+# you can add the following optional dependencies:
+# matplotlib>=3.7.0
+# numpy>=1.25.0
+# opencv-python-headless>=4.9.0.80
+# Pillow>=10.2.0
