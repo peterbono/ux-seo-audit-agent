@@ -51,7 +51,9 @@
         titles, meta descriptions, headings, links, images and alt text,
         measures page speed and weight, and records canonical tags,
         robots meta, Open Graph metadata, structured data, responsive
-        viewport hints and ARIA attributes for accessibility.
+        viewport hints and ARIA attributes for accessibility.  It also
+        checks for semantic landmarks like <code>&lt;nav&gt;</code>, <code>&lt;header&gt;</code>,
+        <code>&lt;main&gt;</code> and <code>&lt;footer&gt;</code>, which improve both SEO and screen‑reader navigation.
       </li>
       <li>
         Analyses readability (Flesch score) and tone.  It counts words,
@@ -62,13 +64,18 @@
       </li>
       <li>
         Visualises page composition via a simple heatmap of headings,
-        images, links and word counts.  This offers a quick snapshot of
-        where your content is concentrated.
+        images, links and word counts.  You can also upload your own
+        screenshot to generate a **saliency heatmap** that overlays a
+        predicted attention map on top of the screenshot, highlighting
+        where a viewer’s eyes are likely to land based on contrast and
+        composition.  While not as precise as behavioural tools like
+        Hotjar, this quick approximation helps you grasp the visual
+        hierarchy of your design without tracking real users.
       </li>
       <li>
-        Highlights keyword gaps by comparing your page’s top terms to a
-        competitor’s.  If the competitor covers topics you don’t, they
-        appear here as opportunities.
+        Highlights content gaps by comparing your page’s top keywords and
+        H2 headings with those of a competitor.  If the competitor covers
+        topics or sections you don’t, they appear here as opportunities.
       </li>
       <li>
         Alerts gambling and betting sites to include responsible gaming
@@ -76,6 +83,11 @@
         “casino”, “poker” or “jeu” in the domain and, if found, checks
         whether the page contains a responsible gambling message and an
         age restriction (18+ or 21+).
+      </li>
+      <li>
+        Notes missing semantic landmarks and low ratios of ARIA labels,
+        encouraging better structure and inclusivity for assistive
+        technologies.
       </li>
       <li>
         Benchmarks against competitor URLs and shows the difference in
